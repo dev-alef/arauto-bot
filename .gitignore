@@ -1,0 +1,16 @@
+# Dependências
+node_modules/
+
+# Segredos — NUNCA versionar!
+.env
+
+# Arquivos gerados em execução
+audio_output/
+logs/
+
+# pm2
+.pm2/
+
+# Sistema operacional
+Thumbs.db
+.DS_Store
