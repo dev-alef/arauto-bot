@@ -1,14 +1,14 @@
 🤖 PM2 (gerenciar o bot)
 pm2 status                       # ver se o bot está rodando
-pm2 logs whatsapp-bot            # ver logs ao vivo (Ctrl+C sai, bot continua)
-pm2 logs whatsapp-bot --lines 100  # ver últimas 100 linhas
-pm2 restart whatsapp-bot         # reiniciar (USAR após editar código ou .env!)
-pm2 stop whatsapp-bot            # parar o bot
-pm2 start whatsapp-bot           # iniciar de novo (se parado)
-pm2 delete whatsapp-bot          # remover do pm2 (pra recriar do zero)
-pm2 start server.js --name whatsapp-bot   # criar de novo (na pasta do projeto)
+pm2 logs arauto-bot            # ver logs ao vivo (Ctrl+C sai, bot continua)
+pm2 logs arauto-bot --lines 100  # ver últimas 100 linhas
+pm2 restart arauto-bot         # reiniciar (USAR após editar código ou .env!)
+pm2 stop arauto-bot            # parar o bot
+pm2 start arauto-bot           # iniciar de novo (se parado)
+pm2 delete arauto-bot          # remover do pm2 (pra recriar do zero)
+pm2 start server.js --name arauto-bot   # criar de novo (na pasta do projeto)
 pm2 save                         # salvar estado atual (após mudanças)
-pm2 flush whatsapp-bot           # limpar logs antigos do pm2
+pm2 flush arauto-bot           # limpar logs antigos do pm2
 
 🐳 Docker (Evolution API + bancos)
 docker ps                        # containers rodando

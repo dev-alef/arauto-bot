@@ -1,6 +1,6 @@
 /**
  * WhatsApp AI Bot - Orquestrador Principal
- * Fluxo: Recebe msg → Fila → Adapta com IA → Gera áudio → Envia no grupo
+ * Fluxo: Recebe msg → Fila → Adapta com IA (2 versões) → Gera áudio → Envia no grupo
  */
 
 const { adaptTextWithAI } = require('./ai-adapter');
@@ -46,19 +46,34 @@ async function processMessage(message) {
   processarFila(); // sem await de propósito — o webhook responde rápido
 }
 
+// ─── LIMPEZA DE TEXTO ────────────────────────────────────────────────────────
+// Remove rubricas que o TTS leria literalmente e normaliza espaçamento
+function limpar(t) {
+  return t
+    .replace(/\((pausa|pausa longa|pausa breve|respira|suspiro|silêncio)\)/gi, ' ')
+    .replace(/\[(pausa|música|som|vinheta)[^\]]*\]/gi, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/ +([.,;!?])/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 // ─── FLUXO DE PROCESSAMENTO ──────────────────────────────────────────────────
 async function executarFluxo(message) {
   const { text, from, messageId } = message;
 
-  // Filtra por número se configurado (tolerante ao nono dígito)
+  // Filtra por número(s) se configurado (aceita lista separada por vírgula, tolerante ao nono dígito)
   if (CONFIG.WATCH_NUMBER) {
     const normalizar = (jid) => {
-      const num = (jid || '').split('@')[0];
+      const num = (jid || '').split('@')[0].trim();
       // Remove o nono dígito de números BR (55 + DDD + 9 + 8 dígitos)
       return num.replace(/^55(\d{2})9(\d{8})$/, '55$1$2');
     };
-    if (normalizar(from) !== normalizar(CONFIG.WATCH_NUMBER)) {
-      log(`🔇 Ignorada (origem ${from} ≠ ${CONFIG.WATCH_NUMBER})`);
+
+    const permitidos = CONFIG.WATCH_NUMBER.split(',').map(normalizar);
+
+    if (!permitidos.includes(normalizar(from))) {
+      log(`🔇 Ignorada (origem ${from} não está na lista de monitorados)`);
       return;
     }
   }
@@ -66,10 +81,10 @@ async function executarFluxo(message) {
   // Ignora mensagens sem texto (áudios, fotos, documentos...)
   if (!text || text.trim().length === 0) return;
 
-  // Filtra por gatilho: só processa mensagens que começam com "Shalom, amado" ou "Amém, amado"
-  const GATILHO = /^(shalom|amém|amem),?\s*amado/i;
+  // Filtra por gatilho: só processa mensagens que começam com "Shalom/Shalon, amado" ou "Amém, amado"
+  const GATILHO = /^(shalom|shalon|amém|amem),?\s*amado/i;
   if (!GATILHO.test(text.trim())) {
-    log(`🔇 Ignorada (não começa com "Shalom amado" ou "Amém amado")`);
+    log(`🔇 Ignorada (não começa com "Shalom/Shalon amado" ou "Amém amado")`);
     return;
   }
 
@@ -77,29 +92,22 @@ async function executarFluxo(message) {
   if (fila.length > 0) log(`📋 Fila: ${fila.length} mensagem(ns) aguardando`);
 
   try {
-    // ETAPA 1: Adaptar texto com IA
+    // ETAPA 1: Adaptar texto com IA (retorna versão escrita + versão narrada)
     log('🤖 Adaptando texto com IA...');
-    const adaptedText = (await adaptTextWithAI(text, CONFIG.AI_PROMPT))
-      // Remove rubricas comuns que TTS leria literalmente (deixa um espaço no lugar)
-      .replace(/\((pausa|pausa longa|pausa breve|respira|suspiro|silêncio)\)/gi, ' ')
-      .replace(/\[(pausa|música|som|vinheta)[^\]]*\]/gi, ' ')
-      // Colapsa espaços/tabs repetidos SEM tocar nas quebras de linha
-      .replace(/[ \t]{2,}/g, ' ')
-      // Remove espaços soltos antes de pontuação (ex: "palavra ." → "palavra.")
-      .replace(/ +([.,;!?])/g, '$1')
-      // Limita quebras de linha excessivas (máx. 2 seguidas = 1 linha em branco)
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-    log(`✅ Texto adaptado: "${adaptedText.substring(0, 60)}..."`);
+    const resultado = await adaptTextWithAI(text, CONFIG.AI_PROMPT);
 
-    // ETAPA 2: Gerar áudio
+    const textoEscrito = limpar(resultado.texto);      // com "2 Reis 4:12"
+    const textoNarrado = limpar(resultado.narracao);   // com "Segundo Reis, capítulo quatro..."
+    log(`✅ Texto adaptado: "${textoEscrito.substring(0, 60)}..."`);
+
+    // ETAPA 2: Gerar áudio A PARTIR DA VERSÃO NARRADA
     log('🎙️ Gerando áudio...');
-    const audioPath = await generateAudio(adaptedText, messageId);
+    const audioPath = await generateAudio(textoNarrado, messageId);
     log(`✅ Áudio salvo em: ${audioPath}`);
 
-    // ETAPA 3: Enviar texto + áudio no grupo
+    // ETAPA 3: Enviar A VERSÃO ESCRITA + áudio no grupo
     log('📤 Enviando para o grupo...');
-    await sendToGroup(CONFIG.TARGET_GROUP_ID, adaptedText, audioPath);
+    await sendToGroup(CONFIG.TARGET_GROUP_ID, textoEscrito, audioPath);
     log('✅ Mensagem enviada no grupo com sucesso!');
 
   } catch (error) {
