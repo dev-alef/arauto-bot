@@ -5,11 +5,13 @@
 
 const { adaptTextWithAI } = require('./ai-adapter');
 const { generateAudio } = require('./speechma');
-const { sendToGroup } = require('./whatsapp');
+const { sendToGroup, sendText } = require('./whatsapp');
 const { log } = require('./logger');
+const { checarVersaoNova } = require('./version-check');
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CONFIG = {
+  AUDIO_ENABLED: (process.env.AUDIO_ENABLED || 'true') !== 'false',
   TARGET_GROUP_ID: process.env.TARGET_GROUP_ID || 'SEU_GRUPO_ID@g.us',
   WATCH_NUMBER: process.env.WATCH_NUMBER || '',
   AI_PROMPT: process.env.AI_PROMPT ||
@@ -100,14 +102,28 @@ async function executarFluxo(message) {
     const textoNarrado = limpar(resultado.narracao);   // com "Segundo Reis, capítulo quatro..."
     log(`✅ Texto adaptado: "${textoEscrito.substring(0, 60)}..."`);
 
-    // ETAPA 2: Gerar áudio A PARTIR DA VERSÃO NARRADA
-    log('🎙️ Gerando áudio...');
-    const audioPath = await generateAudio(textoNarrado, messageId);
-    log(`✅ Áudio salvo em: ${audioPath}`);
+    // ETAPA 2: Áudio (opcional)
+    let audioPath = null;
+    if (CONFIG.AUDIO_ENABLED) {
+      log('🎙️ Gerando áudio...');
+      try {
+        audioPath = await generateAudio(textoNarrado, messageId);
+        log(`✅ Áudio salvo em: ${audioPath}`);
+      } catch (e) {
+        log(`⚠️ Áudio indisponível, publicando só o texto: ${e.message}`, 'warn');
+        checarVersaoNova();
+      }
+    } else {
+      log('🔕 Áudio desativado (AUDIO_ENABLED=false), publicando só o texto');
+    }
 
-    // ETAPA 3: Enviar A VERSÃO ESCRITA + áudio no grupo
+    // ETAPA 3: Enviar para o grupo
     log('📤 Enviando para o grupo...');
-    await sendToGroup(CONFIG.TARGET_GROUP_ID, textoEscrito, audioPath);
+    if (audioPath) {
+      await sendToGroup(CONFIG.TARGET_GROUP_ID, textoEscrito, audioPath);
+    } else {
+      await sendText(CONFIG.TARGET_GROUP_ID, textoEscrito);
+    }
     log('✅ Mensagem enviada no grupo com sucesso!');
 
   } catch (error) {
