@@ -94,6 +94,9 @@ async function executarFluxo(message) {
   if (fila.length > 0) log(`📋 Fila: ${fila.length} mensagem(ns) aguardando`);
 
   try {
+    // Consulta a cada reflexão válida e aguarda a atualização antes do áudio/envio.
+    await checarVersaoNova();
+
     // ETAPA 1: Adaptar texto com IA (retorna versão escrita + versão narrada)
     log('🤖 Adaptando texto com IA...');
     const resultado = await adaptTextWithAI(text, CONFIG.AI_PROMPT);
@@ -111,7 +114,6 @@ async function executarFluxo(message) {
         log(`✅ Áudio salvo em: ${audioPath}`);
       } catch (e) {
         log(`⚠️ Áudio indisponível, publicando só o texto: ${e.message}`, 'warn');
-        checarVersaoNova();
       }
     } else {
       log('🔕 Áudio desativado (AUDIO_ENABLED=false), publicando só o texto');

@@ -151,6 +151,22 @@ pm2 start server.js --name arauto-bot
 pm2 save && pm2-startup install
 ```
 
+## 🔄 Atualização automática do Microsoft Edge TTS
+
+Antes de processar cada reflexão válida, o bot consulta a versão estável `latest` do pacote [msedge-tts](https://github.com/Migushthe2nd/MsEdgeTTS) no npm. Se houver uma versão superior à ativa, aguarda a instalação e passa a usá-la no áudio daquela reflexão, sem reiniciar o processo. A checagem também acontece quando `AUDIO_ENABLED=false`; mensagens descartadas pelos filtros não consultam o npm.
+
+As versões são instaladas em `.tts-runtime/`, isoladas das dependências originais. A versão ativa é salva para os próximos reinícios. O bot valida a interface usada pelo gerador antes de ativar a atualização; isso não garante que futuras versões mantenham todo o comportamento do serviço. As atualizações seguem as versões estáveis publicadas no npm, incluindo versões principais, e não cada commit do GitHub.
+
+A consulta tem limite de 10 segundos e a instalação de 2 minutos. Se a rede, a instalação ou a validação falhar, o bot registra um aviso, mantém a biblioteca disponível e tenta novamente na próxima reflexão. Falhas na geração do áudio continuam permitindo o envio somente do texto.
+
+O processo precisa ter Node.js e npm disponíveis, acesso ao registry npm e permissão de escrita na pasta do projeto. Scripts de instalação dos pacotes ficam desativados. `package.json` e `package-lock.json` originais não são alterados pelas atualizações em execução. Preserve `.tts-runtime/` entre deploys se quiser manter a versão selecionada.
+
+Para executar os testes automatizados sem enviar mensagens ou chamar a IA:
+
+```bash
+npm test
+```
+
 ## 🔑 Variáveis de ambiente
 
 | Variável | Descrição |

@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "test": "node --test tests/version-check.test.js tests/bot-update.test.js tests/speechma-update.test.js",
     "dev": "nodemon server.js",
     "test:ai": "node scripts/test-ai.js",
     "test:speechma": "node scripts/test-speechma.js",

@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+const { obterBiblioteca } = require('./version-check');
 
 const AUDIO_DIR = path.join(__dirname, '..', 'audio_output');
 if (!fs.existsSync(AUDIO_DIR)) fs.mkdirSync(AUDIO_DIR, { recursive: true });
@@ -19,6 +19,7 @@ const DEFAULT_VOICE = process.env.SPEECHMA_VOICE || 'pt-BR-AntonioNeural';
  * @returns {Promise<string>} - Caminho completo do arquivo MP3 gerado
  */
 async function generateAudio(text, messageId = Date.now()) {
+  const { MsEdgeTTS, OUTPUT_FORMAT } = obterBiblioteca();
   const tts = new MsEdgeTTS();
   await tts.setMetadata(DEFAULT_VOICE, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
 
