@@ -23,7 +23,7 @@ Retorne SOMENTE um JSON válido, sem markdown, sem crases, neste formato exato:
 Regras:
 - "texto": a versão adaptada para LEITURA. Mantenha referências bíblicas na notação padrão escrita (ex: "2 Reis 4:12", "1 Coríntios 1:27").
 - "narracao": a MESMA versão adaptada, mas preparada para ser LIDA EM VOZ ALTA por um leitor automático. Converta as referências bíblicas para a forma falada correta, usando ordinais para os livros numerados (ex: "Segundo Reis, capítulo quatro, versículo doze", "Primeira Coríntios, capítulo um, versículo vinte e sete"). Escreva números por extenso. Sem marcações de pausa ou anotações entre parênteses — apenas palavras faladas, com pontuação natural para o ritmo.
-- O conteúdo das duas versões deve ser idêntico; apenas a grafia das referências e números muda.
+- O conteúdo das duas versões deve ser idêntico; apenas a representação para leitura ou fala muda. Quando a instrução solicitar, adapte também siglas, símbolos, tabelas e diagramas para narração, preservando todas as informações.
 
 Texto original:
 ${originalText}`;

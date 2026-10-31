@@ -1,6 +1,6 @@
 /**
  * WhatsApp AI Bot - Orquestrador Principal
- * Fluxo: Recebe msg → Fila → Adapta com IA (2 versões) → Gera áudio → Envia no grupo
+ * Fluxo: Recebe msg → Fila → Adapta com IA (2 versões) → Gera áudio → Envia ao destino da mensagem
  */
 
 const { adaptTextWithAI } = require('./ai-adapter');
@@ -8,12 +8,15 @@ const { generateAudio } = require('./speechma');
 const { sendToGroup, sendText } = require('./whatsapp');
 const { log } = require('./logger');
 const { checarVersaoNova } = require('./version-check');
+const { selecionarRota } = require('./routing');
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CONFIG = {
   AUDIO_ENABLED: (process.env.AUDIO_ENABLED || 'true') !== 'false',
   TARGET_GROUP_ID: process.env.TARGET_GROUP_ID || 'SEU_GRUPO_ID@g.us',
   WATCH_NUMBER: process.env.WATCH_NUMBER || '',
+  IA_WATCH_NUMBER: process.env.IA_WATCH_NUMBER || '',
+  IA_TARGET_NUMBER: process.env.IA_TARGET_NUMBER || '',
   AI_PROMPT: process.env.AI_PROMPT ||
     'Adapte esta mensagem para um tom mais formal e profissional, mantendo o conteúdo original. Retorne apenas o texto adaptado, sem explicações:',
 };
@@ -64,33 +67,14 @@ function limpar(t) {
 async function executarFluxo(message) {
   const { text, from, messageId } = message;
 
-  // Filtra por número(s) se configurado (aceita lista separada por vírgula, tolerante ao nono dígito)
-  if (CONFIG.WATCH_NUMBER) {
-    const normalizar = (jid) => {
-      const num = (jid || '').split('@')[0].trim();
-      // Remove o nono dígito de números BR (55 + DDD + 9 + 8 dígitos)
-      return num.replace(/^55(\d{2})9(\d{8})$/, '55$1$2');
-    };
-
-    const permitidos = CONFIG.WATCH_NUMBER.split(',').map(normalizar);
-
-    if (!permitidos.includes(normalizar(from))) {
-      log(`🔇 Ignorada (origem ${from} não está na lista de monitorados)`);
-      return;
-    }
-  }
-
-  // Ignora mensagens sem texto (áudios, fotos, documentos...)
-  if (!text || text.trim().length === 0) return;
-
-  // Filtra por gatilho: só processa mensagens que começam com "Shalom/Shalon, amado" ou "Amém, amado"
-  const GATILHO = /^(shalom|shalon|amém|amem),?\s*amado/i;
-  if (!GATILHO.test(text.trim())) {
-    log(`🔇 Ignorada (não começa com "Shalom/Shalon amado" ou "Amém amado")`);
+  const rota = selecionarRota(text, from, CONFIG);
+  if (rota.ignorar) {
+    log(`🔇 Ignorada (${rota.ignorar})`, rota.aviso ? 'warn' : 'info');
     return;
   }
 
   log(`📩 Mensagem recebida de ${from}: "${text.substring(0, 60)}..."`);
+  log(`🎯 Rota: ${rota.tipo} → ${rota.destino}`);
   if (fila.length > 0) log(`📋 Fila: ${fila.length} mensagem(ns) aguardando`);
 
   try {
@@ -99,7 +83,7 @@ async function executarFluxo(message) {
 
     // ETAPA 1: Adaptar texto com IA (retorna versão escrita + versão narrada)
     log('🤖 Adaptando texto com IA...');
-    const resultado = await adaptTextWithAI(text, CONFIG.AI_PROMPT);
+    const resultado = await adaptTextWithAI(text, rota.prompt);
 
     const textoEscrito = limpar(resultado.texto);      // com "2 Reis 4:12"
     const textoNarrado = limpar(resultado.narracao);   // com "Segundo Reis, capítulo quatro..."
@@ -119,14 +103,14 @@ async function executarFluxo(message) {
       log('🔕 Áudio desativado (AUDIO_ENABLED=false), publicando só o texto');
     }
 
-    // ETAPA 3: Enviar para o grupo
-    log('📤 Enviando para o grupo...');
+    // ETAPA 3: Enviar ao grupo ou contato selecionado
+    log(`📤 Enviando ${rota.tipo}...`);
     if (audioPath) {
-      await sendToGroup(CONFIG.TARGET_GROUP_ID, textoEscrito, audioPath);
+      await sendToGroup(rota.destino, textoEscrito, audioPath);
     } else {
-      await sendText(CONFIG.TARGET_GROUP_ID, textoEscrito);
+      await sendText(rota.destino, textoEscrito);
     }
-    log('✅ Mensagem enviada no grupo com sucesso!');
+    log(`✅ ${rota.tipo} enviada com sucesso!`);
 
   } catch (error) {
     log(`❌ Erro ao processar mensagem: ${error.message}`, 'error');

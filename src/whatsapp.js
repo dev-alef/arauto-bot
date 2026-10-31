@@ -82,8 +82,8 @@ async function sendAudio(groupId, audioPath, caption = '') {
 }
 
 /**
- * Envia texto adaptado + áudio para o grupo
- * @param {string} groupId - ID do grupo destino
+ * Envia texto adaptado + áudio para um grupo ou número privado
+ * @param {string} groupId - ID do grupo ou telefone de destino com DDI
  * @param {string} adaptedText - Texto já adaptado pela IA
  * @param {string} audioPath - Caminho do arquivo MP3 gerado
  */
