@@ -17,6 +17,7 @@ const CONFIG = {
   WATCH_NUMBER: process.env.WATCH_NUMBER || '',
   IA_WATCH_NUMBER: process.env.IA_WATCH_NUMBER || '',
   IA_TARGET_NUMBER: process.env.IA_TARGET_NUMBER || '',
+  IA_TARGET_GROUP_ID: process.env.IA_TARGET_GROUP_ID || '',
   AI_PROMPT: process.env.AI_PROMPT ||
     'Adapte esta mensagem para um tom mais formal e profissional, mantendo o conteúdo original. Retorne apenas o texto adaptado, sem explicações:',
 };

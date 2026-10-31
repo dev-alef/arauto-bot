@@ -71,7 +71,7 @@ arauto-bot/
 ├── server.js              # Servidor Express — recebe os webhooks
 ├── src/
 │   ├── bot.js             # Orquestrador: fila, filtros e fluxo
-│   ├── routing.js         # Reflexões no grupo; aulas de IA em contato privado
+│   ├── routing.js         # Reflexões no grupo; aulas de IA em outro grupo ou contato
 │   ├── ai-adapter.js      # Integração com Google Gemini (com retry)
 │   ├── speechma.js        # Geração de áudio (msedge-tts)
 │   ├── whatsapp.js        # Cliente da Evolution API (texto + áudio PTT)
@@ -152,27 +152,32 @@ pm2 start server.js --name arauto-bot
 pm2 save && pm2-startup install
 ```
 
-## 📘 Aulas de IA em um contato privado
+## 📘 Aulas de IA em outro grupo ou contato
 
 O bot mantém dois fluxos na mesma fila:
 
 | Conteúdo recebido | Destino | Adaptação |
 |---|---|---|
 | Reflexões com o gatilho atual | `TARGET_GROUP_ID` | Instrução atual de `AI_PROMPT` |
-| Mensagens com o mesmo gatilho e a expressão **Curso Progressivo de Inteligência Artificial** | `IA_TARGET_NUMBER` | Aula completa para leitura e narração técnica |
+| Mensagens com o mesmo gatilho e a expressão **Curso Progressivo de Inteligência Artificial** | `IA_TARGET_GROUP_ID` ou `IA_TARGET_NUMBER` | Aula completa para leitura e narração técnica |
 
 O gatilho continua sendo “Shalom/Shalon, amado” ou “Amém, amado”, no início da mensagem. O nome do curso é reconhecido independentemente de caixa, acento em “inteligência” e quebras de linha entre as palavras. Apenas mencionar IA, GPU ou uma aula não muda o destino. A expressão completa do curso precisa constar nas aulas para identificá-las.
 
-Configure no `.env` o remetente autorizado e o telefone de destino privado, com DDI e DDD. Use somente dígitos no destino, por exemplo:
+Configure no `.env` o remetente autorizado e o ID do grupo exclusivo das aulas. O WhatsApp conectado à Evolution API precisa participar desse grupo e ter permissão para enviar mensagens. Exemplo:
 
 ```dotenv
 IA_WATCH_NUMBER=5511988887777
-IA_TARGET_NUMBER=5524999990000
+IA_TARGET_GROUP_ID=120363999999999@g.us
+IA_TARGET_NUMBER=
 ```
+
+Para descobrir o grupo, consulte `GET /group/fetchAllGroups/{instance}?getParticipants=false` com o header `apikey` da Evolution. Na resposta, `subject` é o nome e `id` é o identificador completo do grupo.
+
+Se preferir um contato privado, deixe `IA_TARGET_GROUP_ID` vazio e configure `IA_TARGET_NUMBER` somente com os dígitos do telefone. Se ambos estiverem preenchidos, apenas o grupo de IA recebe a aula.
 
 Se `IA_WATCH_NUMBER` estiver vazio, as aulas usam a lista existente em `WATCH_NUMBER`. Se ambos estiverem vazios, as aulas são ignoradas. A comparação de remetentes aceita o número brasileiro com ou sem o nono dígito. `WATCH_NUMBER` e `TARGET_GROUP_ID` continuam controlando as reflexões normais.
 
-A aula tem prioridade sobre o fluxo do grupo e recebe um único destino. Se o destino privado estiver vazio, inválido ou for um ID de grupo, ela é ignorada com aviso no log, sem ser redirecionada ao grupo. As instruções de narração pedem ao Gemini que preserve o conteúdo completo e adapte números, siglas, unidades, cálculos, tabelas e diagramas para fala natural. Essa adaptação é gerada por IA e pode precisar de ajustes após ouvir as primeiras aulas.
+A aula tem prioridade sobre o fluxo do grupo e recebe um único destino. Sem destino válido, a aula é ignorada com aviso no log. Se `IA_TARGET_GROUP_ID` estiver preenchido, mas inválido, não há envio ao número privado antigo nem ao grupo das reflexões. As instruções de narração pedem ao Gemini que preserve o conteúdo completo e adapte números, siglas, unidades, cálculos, tabelas e diagramas para fala natural. Essa adaptação é gerada por IA e pode precisar de ajustes após ouvir as primeiras aulas.
 
 Com `AUDIO_ENABLED=true`, ambos os fluxos enviam texto e áudio. Se a geração do áudio falhar, enviam somente texto ao mesmo destino selecionado. A atualização automática do TTS é verificada nos dois fluxos.
 
@@ -181,7 +186,7 @@ Com `AUDIO_ENABLED=true`, ambos os fluxos enviam texto e áudio. Se a geração 
 Esta alteração não exige migração de banco nem recriação de PostgreSQL, Redis ou Evolution API. Se o bot já recebe e envia mensagens, mantenha as configurações atuais de conexão, instância, webhook e grupo.
 
 1. Na pasta do bot, execute `git pull --ff-only origin main`.
-2. Edite o `.env` existente e acrescente `IA_WATCH_NUMBER` e `IA_TARGET_NUMBER` com os números corretos. Preserve as demais variáveis; não substitua o arquivo pelo `.env.example`.
+2. Edite o `.env` existente e acrescente `IA_WATCH_NUMBER` e `IA_TARGET_GROUP_ID` com o remetente e o grupo corretos. Preserve as demais variáveis; não substitua o arquivo pelo `.env.example`.
 3. Garanta que `AUDIO_ENABLED` esteja ausente (padrão `true`) ou definido como `true`.
 4. Execute `npm test` e reinicie o processo. Com PM2: `pm2 restart arauto-bot --update-env`.
 5. Acompanhe `pm2 logs arauto-bot --lines 50`. O log identifica “reflexão do grupo” ou “aula de IA” e o destino escolhido.
@@ -215,6 +220,7 @@ npm test
 | `TARGET_GROUP_ID` | ID do grupo destino (`...@g.us`) |
 | `WATCH_NUMBER` | Remetentes das reflexões (vazio = todos); padrão para origem das aulas |
 | `IA_WATCH_NUMBER` | Remetente(s) autorizado(s) das aulas de IA; vazio usa `WATCH_NUMBER` |
+| `IA_TARGET_GROUP_ID` | Grupo exclusivo das aulas de IA, com `@g.us`; tem prioridade sobre o contato privado |
 | `IA_TARGET_NUMBER` | Telefone privado para aulas de IA, com DDI e DDD; sem ID de grupo |
 | `AUDIO_ENABLED` | `true` para texto + áudio nos dois fluxos (padrão); `false` para somente texto |
 | `SPEECHMA_VOICE` | Voz neural (padrão: `pt-BR-AntonioNeural`) |

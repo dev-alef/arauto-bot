@@ -79,3 +79,18 @@ test('origem da aula pode ser configurada sem mudar origem das reflexões', () =
   assert.equal(selecionarRota(aula, '5511988887777@s.whatsapp.net', outro).destino, config.IA_TARGET_NUMBER);
   assert.ok(selecionarRota(reflexao, '5511988887777@s.whatsapp.net', outro).ignorar);
 });
+
+
+test('grupo de IA tem prioridade sobre o número privado e preserva IDs com hífen', () => {
+  for (const grupo of ['120363999999999@g.us', '5524999990000-1234567890@g.us']) {
+    assert.equal(selecionarRota(aula, origem, { ...config, IA_TARGET_GROUP_ID: grupo }).destino, grupo);
+  }
+});
+
+test('grupo de IA inválido bloqueia envio, sem recorrer ao contato antigo', () => {
+  for (const grupo of ['abc@g.us', '120363999999999', '5524999990000@s.whatsapp.net']) {
+    const rota = selecionarRota(aula, origem, { ...config, IA_TARGET_GROUP_ID: grupo });
+    assert.ok(rota.ignorar);
+    assert.equal(rota.destino, undefined);
+  }
+});

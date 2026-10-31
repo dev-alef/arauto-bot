@@ -36,7 +36,7 @@ function preparar(t, audio = true, { env = {}, falharAudio = false } = {}) {
     simular('logger', { log() {} });
     const variaveis = {
         AUDIO_ENABLED: String(audio), WATCH_NUMBER: '5511999999999',
-        TARGET_GROUP_ID: 'grupo-atual@g.us', IA_WATCH_NUMBER: '', IA_TARGET_NUMBER: '',
+        TARGET_GROUP_ID: 'grupo-atual@g.us', IA_WATCH_NUMBER: '', IA_TARGET_NUMBER: '', IA_TARGET_GROUP_ID: '',
         ...env,
     };
     const anteriores = Object.fromEntries(Object.keys(variaveis).map(nome => [nome, process.env[nome]]));
@@ -126,5 +126,16 @@ test('falha de áudio na aula envia somente o texto ao contato correto', async t
     await proximoTurno();
     assert.deepEqual(ctx.chamadas.filter(c => c.etapa === 'envio'), [
         { etapa: 'envio', destino: '5524999990000', texto: 'Reflexão' },
+    ]);
+});
+
+test('aulas vão somente ao segundo grupo quando ele está configurado, mantendo reflexões no grupo atual', async t => {
+    const ctx = preparar(t, true, { env: { ...envCurso, IA_TARGET_GROUP_ID: '120363999999999@g.us' } });
+    ctx.concluirAtualizacao();
+    await ctx.processMessage(aula);
+    await ctx.processMessage(reflexao);
+    await proximoTurno();
+    assert.deepEqual(ctx.chamadas.filter(c => c.etapa === 'envio').map(c => c.destino), [
+        '120363999999999@g.us', 'grupo-atual@g.us',
     ]);
 });

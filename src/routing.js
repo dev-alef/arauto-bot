@@ -28,9 +28,12 @@ function selecionarRota(text, from, config) {
     if (!origem || !origemPermitida(from, origem)) {
       return { ignorar: 'remetente da aula de IA não autorizado ou não configurado' };
     }
-    const destino = (config.IA_TARGET_NUMBER || '').replace(/[+().\s-]/g, '');
-    if (!/^\d{8,15}$/.test(destino)) {
-      return { ignorar: 'IA_TARGET_NUMBER ausente ou inválido; aula não será enviada ao grupo', aviso: true };
+    const grupo = (config.IA_TARGET_GROUP_ID || '').trim();
+    const telefone = (config.IA_TARGET_NUMBER || '').replace(/[+().\s-]/g, '');
+    const destino = grupo || telefone;
+    // Grupo tem prioridade; um grupo inválido não redireciona a aula ao contato antigo.
+    if (grupo ? !/^\d+(?:-\d+)?@g\.us$/.test(grupo) : !/^\d{8,15}$/.test(telefone)) {
+      return { ignorar: 'destino das aulas de IA ausente ou inválido; aula não será enviada', aviso: true };
     }
     return { tipo: 'aula de IA', destino, prompt: IA_PROMPT };
   }
