@@ -31,12 +31,13 @@ function getHeaders() {
  * @param {string} groupId - ID do grupo (ex: 55219XXXXXXXX-XXXXXXXXX@g.us)
  * @param {string} text - Texto a enviar
  */
-async function sendText(groupId, text) {
+async function sendText(groupId, text, { signal } = {}) {
   const url = `${EVOLUTION.baseUrl}/message/sendText/${EVOLUTION.instance}`;
 
   const response = await fetch(url, {
     method: 'POST',
     headers: getHeaders(),
+    signal,
     body: JSON.stringify({
       number: groupId,
       text: text,

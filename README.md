@@ -57,7 +57,7 @@ Mensagens reflexivas recebidas no WhatsApp precisavam ser: reescritas em um tom 
 
 ### Destaques de engenharia
 
-- **Fila sequencial (FIFO):** mensagens em rajada eram processadas em paralelo e os pares texto/áudio se embaralhavam no grupo (race condition). A fila garante processamento um-por-vez, na ordem de chegada.
+- **Fila sequencial (FIFO):** mensagens em rajada eram processadas em paralelo e os pares texto/áudio se embaralhavam no grupo (race condition). A fila garante processamento um-por-vez, na ordem de chegada, com pausa aleatória de 1 a 3 minutos entre reflexões.
 - **Retry com backoff progressivo:** falhas temporárias da IA (HTTP 503/429) são reprocessadas automaticamente em 5s → 10s → 15s.
 - **Normalização do nono dígito (BR):** o WhatsApp entrega números ora com, ora sem o nono dígito; o filtro de origem normaliza ambos os formatos antes de comparar.
 - **Sanitização anti-rubrica:** remove marcações como `(pausa)` que a IA eventualmente gera e que o TTS leria literalmente.
@@ -179,7 +179,7 @@ Se `IA_WATCH_NUMBER` estiver vazio, as aulas usam a lista existente em `WATCH_NU
 
 A aula tem prioridade sobre o fluxo do grupo e recebe um único destino. Sem destino válido, a aula é ignorada com aviso no log. Se `IA_TARGET_GROUP_ID` estiver preenchido, mas inválido, não há envio ao número privado antigo nem ao grupo das reflexões. As instruções de narração pedem ao Gemini que preserve o conteúdo completo e adapte números, siglas, unidades, cálculos, tabelas e diagramas para fala natural. Essa adaptação é gerada por IA e pode precisar de ajustes após ouvir as primeiras aulas.
 
-Com `AUDIO_ENABLED=true`, ambos os fluxos enviam texto e áudio. Se a geração do áudio falhar, enviam somente texto ao mesmo destino selecionado. A atualização automática do TTS é verificada nos dois fluxos.
+Com `AUDIO_ENABLED=true`, ambos os fluxos geram áudio antes de publicar texto e áudio. Se a geração do áudio falhar, o bot faz até três novas tentativas, com intervalo aleatório de 3 a 5 minutos. Se todas falharem, a reflexão não é publicada e um relatório é enviado ao número em `ERROR_REPORT_NUMBER`. A atualização automática do TTS é verificada nos dois fluxos.
 
 ### Atualizar uma instalação existente no Ubuntu Server
 
@@ -193,13 +193,23 @@ Esta alteração não exige migração de banco nem recriação de PostgreSQL, R
 
 Nenhuma dependência nova é necessária para esta mudança. Se o próprio bot estiver dentro de um container, reconstrua/recrie somente o serviço do bot com o código novo e as variáveis carregadas pelo container. Editar um `.env` no host só funciona se o serviço realmente o repassar ou montar. Preserve as pastas persistentes do bot, especialmente `.tts-runtime/`. A Evolution API precisa permanecer conectada à conta do WhatsApp e acessível pelo bot; a mudança de sistema operacional não altera as rotas de envio usadas pelo código.
 
+## ⏱️ Fila e relatório de falhas de áudio
+
+Depois de cada tentativa de publicação, o bot sorteia uma pausa de 1 a 3 minutos antes de processar a próxima reflexão válida. O intervalo também é respeitado quando a fila fica vazia e chega outra mensagem logo depois. Texto e áudio da mesma reflexão continuam sendo enviados juntos; a pausa longa é entre reflexões.
+
+Se a **geração** do áudio falhar, inclusive se o stream encerrar antes de `turn.end`, o bot aguarda de 3 a 5 minutos entre tentativas e tenta até quatro vezes no total. Durante as tentativas, as mensagens seguintes permanecem na fila. Caso nenhuma funcione, a reflexão não é publicada; o bot envia ao número em `ERROR_REPORT_NUMBER` um relatório com o destino, ID da mensagem e os erros das tentativas. Em seguida, continua a fila. Quando o áudio é desativado por `AUDIO_ENABLED=false`, o envio somente de texto continua sendo intencional.
+
+Configure `ERROR_REPORT_NUMBER` no `.env` com DDI e DDD e apenas dígitos. Pode ser o número conectado à Evolution API, mas verifique que o envio para si mesmo funciona nessa instalação. Se o número não estiver configurado ou o envio do relatório falhar, o erro fica no log e o processamento segue. O envio do relatório tem limite de 15 segundos.
+
+A fila e as esperas ficam na memória: reiniciar o bot durante o processamento pode descartar a mensagem em andamento e as mensagens que aguardam. Além disso, texto e áudio são chamadas separadas à Evolution: se ela aceitar o texto e falhar depois no envio do áudio, não há como desfazer automaticamente o texto já enviado. As novas tentativas acima tratam falhas de geração do áudio antes da publicação.
+
 ## 🔄 Atualização automática do Microsoft Edge TTS
 
 Antes de processar cada reflexão válida, o bot consulta a versão estável `latest` do pacote [msedge-tts](https://github.com/Migushthe2nd/MsEdgeTTS) no npm. Se houver uma versão superior à ativa, aguarda a instalação e passa a usá-la no áudio daquela reflexão, sem reiniciar o processo. A checagem também acontece quando `AUDIO_ENABLED=false`; mensagens descartadas pelos filtros não consultam o npm.
 
 As versões são instaladas em `.tts-runtime/`, isoladas das dependências originais. A versão ativa é salva para os próximos reinícios. O bot valida a interface usada pelo gerador antes de ativar a atualização; isso não garante que futuras versões mantenham todo o comportamento do serviço. As atualizações seguem as versões estáveis publicadas no npm, incluindo versões principais, e não cada commit do GitHub.
 
-A consulta tem limite de 10 segundos e a instalação de 2 minutos. Se a rede, a instalação ou a validação falhar, o bot registra um aviso, mantém a biblioteca disponível e tenta novamente na próxima reflexão. Falhas na geração do áudio continuam permitindo o envio somente do texto.
+A consulta tem limite de 10 segundos e a instalação de 2 minutos. Se a rede, a instalação ou a validação falhar, o bot registra um aviso, mantém a biblioteca disponível e tenta novamente na próxima reflexão.
 
 O processo precisa ter Node.js e npm disponíveis, acesso ao registry npm e permissão de escrita na pasta do projeto. Scripts de instalação dos pacotes ficam desativados. `package.json` e `package-lock.json` originais não são alterados pelas atualizações em execução. Preserve `.tts-runtime/` entre deploys se quiser manter a versão selecionada.
 
@@ -223,6 +233,7 @@ npm test
 | `IA_TARGET_GROUP_ID` | Grupo exclusivo das aulas de IA, com `@g.us`; tem prioridade sobre o contato privado |
 | `IA_TARGET_NUMBER` | Telefone privado para aulas de IA, com DDI e DDD; sem ID de grupo |
 | `AUDIO_ENABLED` | `true` para texto + áudio nos dois fluxos (padrão); `false` para somente texto |
+| `ERROR_REPORT_NUMBER` | WhatsApp que recebe os relatórios de falha de áudio, com DDI e DDD, apenas dígitos |
 | `SPEECHMA_VOICE` | Voz neural (padrão: `pt-BR-AntonioNeural`) |
 | `WEBHOOK_TOKEN` | Token de segurança do webhook |
 | `AI_PROMPT` | Instrução de adaptação do texto |

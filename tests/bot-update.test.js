@@ -13,6 +13,8 @@ function preparar(t, audio = true, { env = {}, falharAudio = false } = {}) {
         originais.set(arquivo, require.cache[arquivo]);
         require.cache[arquivo] = { id: arquivo, filename: arquivo, loaded: true, exports };
     }
+    let agora = 0;
+    simular('tempo', { agora: () => agora, sortear: minimo => minimo, esperar: async ms => { agora += ms; } });
     simular('version-check', { checarVersaoNova: async () => {
         eventos.push('consulta');
         await atualizacao;
@@ -36,7 +38,7 @@ function preparar(t, audio = true, { env = {}, falharAudio = false } = {}) {
     simular('logger', { log() {} });
     const variaveis = {
         AUDIO_ENABLED: String(audio), WATCH_NUMBER: '5511999999999',
-        TARGET_GROUP_ID: 'grupo-atual@g.us', IA_WATCH_NUMBER: '', IA_TARGET_NUMBER: '', IA_TARGET_GROUP_ID: '',
+        TARGET_GROUP_ID: 'grupo-atual@g.us', IA_WATCH_NUMBER: '', IA_TARGET_NUMBER: '', IA_TARGET_GROUP_ID: '', ERROR_REPORT_NUMBER: '5511888887777',
         ...env,
     };
     const anteriores = Object.fromEntries(Object.keys(variaveis).map(nome => [nome, process.env[nome]]));
@@ -119,14 +121,16 @@ test('aula sem destino configurado não chama IA, TTS ou envio ao grupo', async 
     assert.deepEqual(ctx.chamadas, []);
 });
 
-test('falha de áudio na aula envia somente o texto ao contato correto', async t => {
+test('falha de áudio na aula reporta ao monitoramento sem publicar o texto', async t => {
     const ctx = preparar(t, true, { env: envCurso, falharAudio: true });
     ctx.concluirAtualizacao();
     await ctx.processMessage(aula);
     await proximoTurno();
-    assert.deepEqual(ctx.chamadas.filter(c => c.etapa === 'envio'), [
-        { etapa: 'envio', destino: '5524999990000', texto: 'Reflexão' },
-    ]);
+    assert.equal(ctx.chamadas.filter(c => c.etapa === 'audio').length, 4);
+    const envios = ctx.chamadas.filter(c => c.etapa === 'envio');
+    assert.equal(envios.length, 1);
+    assert.equal(envios[0].destino, '5511888887777');
+    assert.match(envios[0].texto, /TTS indisponível/);
 });
 
 test('aulas vão somente ao segundo grupo quando ele está configurado, mantendo reflexões no grupo atual', async t => {

@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { pipeline } = require('stream/promises');
 const { obterBiblioteca } = require('./version-check');
 
 const AUDIO_DIR = path.join(__dirname, '..', 'audio_output');
@@ -28,13 +29,14 @@ async function generateAudio(text, messageId = Date.now()) {
 
   const { audioStream } = await tts.toStream(text);
 
-  return new Promise((resolve, reject) => {
-    const writeStream = fs.createWriteStream(filepath);
-    audioStream.pipe(writeStream);
-    writeStream.on('finish', () => resolve(filepath));
-    writeStream.on('error', reject);
-    audioStream.on('error', reject);
-  });
+  try {
+    await pipeline(audioStream, fs.createWriteStream(filepath));
+    return filepath;
+  } catch (error) {
+    // Um stream interrompido não pode deixar um MP3 incompleto disponível.
+    await fs.promises.rm(filepath, { force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 module.exports = { generateAudio };

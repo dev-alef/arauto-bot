@@ -9,6 +9,7 @@ const { sendToGroup, sendText } = require('./whatsapp');
 const { log } = require('./logger');
 const { checarVersaoNova } = require('./version-check');
 const { selecionarRota } = require('./routing');
+const tempo = require('./tempo');
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CONFIG = {
@@ -18,6 +19,7 @@ const CONFIG = {
   IA_WATCH_NUMBER: process.env.IA_WATCH_NUMBER || '',
   IA_TARGET_NUMBER: process.env.IA_TARGET_NUMBER || '',
   IA_TARGET_GROUP_ID: process.env.IA_TARGET_GROUP_ID || '',
+  ERROR_REPORT_NUMBER: process.env.ERROR_REPORT_NUMBER || '',
   AI_PROMPT: process.env.AI_PROMPT ||
     'Adapte esta mensagem para um tom mais formal e profissional, mantendo o conteúdo original. Retorne apenas o texto adaptado, sem explicações:',
 };
@@ -27,6 +29,69 @@ const CONFIG = {
 // evitando que textos e áudios de mensagens diferentes se misturem no grupo.
 const fila = [];
 let processando = false;
+let proximoEnvioEm = 0;
+
+const MINUTO = 60 * 1000;
+const MAX_TENTATIVAS_AUDIO = 4; // tentativa inicial + três novas tentativas
+
+async function aguardarIntervalo() {
+  let restante = proximoEnvioEm - tempo.agora();
+  if (restante > 0) {
+    log(`⏳ Aguardando ${Math.ceil(restante / 1000)}s antes da próxima reflexão.`);
+    do {
+      await tempo.esperar(restante);
+      restante = proximoEnvioEm - tempo.agora();
+    } while (restante > 0);
+  }
+}
+
+async function reportarFalhaAudio(message, rota, erros) {
+  const numero = CONFIG.ERROR_REPORT_NUMBER.replace(/[+().\s-]/g, '');
+  if (!/^\d{8,15}$/.test(numero)) {
+    log('❌ Falha de áudio sem notificação: configure ERROR_REPORT_NUMBER com DDI e DDD.', 'error');
+    return;
+  }
+
+  const detalhes = erros.map((erro, indice) =>
+    `${indice + 1}ª tentativa: ${String(erro?.message || erro).replace(/[\r\n]+/g, ' ').slice(0, 400)}`
+  ).join('\n');
+  const relatorio = [
+    '⚠️ Arauto Bot: falha na geração de áudio',
+    `Tipo: ${rota.tipo}`,
+    `Destino: ${rota.destino}`,
+    `ID da mensagem: ${message.messageId || 'não informado'}`,
+    `Tentativas: ${erros.length}`,
+    detalhes,
+    'A reflexão não foi publicada. As próximas mensagens continuam na fila.',
+  ].join('\n');
+
+  try {
+    await sendText(numero, relatorio, { signal: AbortSignal.timeout(15000) });
+    log('📨 Relatório de falha de áudio enviado ao número de monitoramento.');
+  } catch (error) {
+    log(`❌ Não foi possível enviar o relatório de falha de áudio: ${error.message}`, 'error');
+  }
+}
+
+async function gerarAudioComTentativas(textoNarrado, message, rota) {
+  const erros = [];
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_AUDIO; tentativa++) {
+    try {
+      log(`🎙️ Gerando áudio (tentativa ${tentativa}/${MAX_TENTATIVAS_AUDIO})...`);
+      return await generateAudio(textoNarrado, message.messageId);
+    } catch (error) {
+      erros.push(error);
+      log(`⚠️ Falha na tentativa ${tentativa}/${MAX_TENTATIVAS_AUDIO}: ${error.message}`, 'warn');
+      if (tentativa < MAX_TENTATIVAS_AUDIO) {
+        const espera = tempo.sortear(3 * MINUTO, 5 * MINUTO);
+        log(`⏳ Nova tentativa de áudio em ${Math.ceil(espera / 1000)}s.`);
+        await tempo.esperar(espera);
+      }
+    }
+  }
+  await reportarFalhaAudio(message, rota, erros);
+  return null;
+}
 
 async function processarFila() {
   if (processando) return; // já tem alguém trabalhando na fila
@@ -66,7 +131,7 @@ function limpar(t) {
 
 // ─── FLUXO DE PROCESSAMENTO ──────────────────────────────────────────────────
 async function executarFluxo(message) {
-  const { text, from, messageId } = message;
+  const { text, from } = message;
 
   const rota = selecionarRota(text, from, CONFIG);
   if (rota.ignorar) {
@@ -79,6 +144,9 @@ async function executarFluxo(message) {
   if (fila.length > 0) log(`📋 Fila: ${fila.length} mensagem(ns) aguardando`);
 
   try {
+    // A espera também se aplica quando a fila ficou vazia entre mensagens.
+    await aguardarIntervalo();
+
     // Consulta a cada reflexão válida e aguarda a atualização antes do áudio/envio.
     await checarVersaoNova();
 
@@ -93,23 +161,24 @@ async function executarFluxo(message) {
     // ETAPA 2: Áudio (opcional)
     let audioPath = null;
     if (CONFIG.AUDIO_ENABLED) {
-      log('🎙️ Gerando áudio...');
-      try {
-        audioPath = await generateAudio(textoNarrado, messageId);
-        log(`✅ Áudio salvo em: ${audioPath}`);
-      } catch (e) {
-        log(`⚠️ Áudio indisponível, publicando só o texto: ${e.message}`, 'warn');
-      }
+      audioPath = await gerarAudioComTentativas(textoNarrado, message, rota);
+      if (!audioPath) return;
+      log(`✅ Áudio salvo em: ${audioPath}`);
     } else {
       log('🔕 Áudio desativado (AUDIO_ENABLED=false), publicando só o texto');
     }
 
     // ETAPA 3: Enviar ao grupo ou contato selecionado
     log(`📤 Enviando ${rota.tipo}...`);
-    if (audioPath) {
-      await sendToGroup(rota.destino, textoEscrito, audioPath);
-    } else {
-      await sendText(rota.destino, textoEscrito);
+    try {
+      if (audioPath) {
+        await sendToGroup(rota.destino, textoEscrito, audioPath);
+      } else {
+        await sendText(rota.destino, textoEscrito);
+      }
+    } finally {
+      // Mesmo se o envio falhar, a Evolution pode ter recebido parte da mensagem.
+      proximoEnvioEm = tempo.agora() + tempo.sortear(MINUTO, 3 * MINUTO);
     }
     log(`✅ ${rota.tipo} enviada com sucesso!`);
 
