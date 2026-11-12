@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { selecionarRota } = require('../src/routing');
+const { selecionarRota, normalizarTextoRecebido } = require('../src/routing');
 
 const config = {
   WATCH_NUMBER: '553188887777',
@@ -93,4 +93,30 @@ test('grupo de IA inválido bloqueia envio, sem recorrer ao contato antigo', () 
     assert.ok(rota.ignorar);
     assert.equal(rota.destino, undefined);
   }
+});
+
+test('aceita aviso Pensou por antes da saudação nas reflexões e aulas', () => {
+  for (const aviso of ['Pensou por 57s\n', 'PENSOU POR 1 minuto e 3 segundos\n\n', 'Pensou por 2m 10s\r\n']) {
+    assert.equal(selecionarRota(aviso + reflexao, origem, config).destino, config.TARGET_GROUP_ID);
+    assert.equal(selecionarRota(aviso + aula, origem, config).destino, config.IA_TARGET_NUMBER);
+  }
+});
+
+test('aviso Pensou por não dispensa saudação nem filtro de remetente', () => {
+  assert.ok(selecionarRota('Pensou por 57s\nBom dia!', origem, config).ignorar);
+  assert.ok(selecionarRota('Pensou por 57s\n' + reflexao, '550000000000@s.whatsapp.net', config).ignorar);
+});
+
+
+test('aceita aviso de pensamento antes dos outros gatilhos existentes', () => {
+  for (const inicio of ['Amém, amado', 'Amem amado', 'Shalon, amado']) {
+    assert.equal(selecionarRota(` \nPensou por 1h 2m 3s\n\n${inicio}! Uma reflexão.`, origem, config).destino, config.TARGET_GROUP_ID);
+  }
+});
+
+test('preserva texto de pensamento que não é o aviso de abertura', () => {
+  const corpo = 'Shalom, amado! Ele pensou por 57s antes de responder.';
+  assert.equal(normalizarTextoRecebido(corpo), corpo);
+  const semSaudacao = 'Pensou por 57s\nBom dia!';
+  assert.equal(normalizarTextoRecebido(semSaudacao), semSaudacao);
 });

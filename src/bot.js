@@ -8,7 +8,7 @@ const { generateAudio } = require('./speechma');
 const { sendToGroup, sendText } = require('./whatsapp');
 const { log } = require('./logger');
 const { checarVersaoNova } = require('./version-check');
-const { selecionarRota } = require('./routing');
+const { selecionarRota, normalizarTextoRecebido } = require('./routing');
 const tempo = require('./tempo');
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
@@ -131,7 +131,8 @@ function limpar(t) {
 
 // ─── FLUXO DE PROCESSAMENTO ──────────────────────────────────────────────────
 async function executarFluxo(message) {
-  const { text, from } = message;
+  const { from } = message;
+  const text = normalizarTextoRecebido(message.text);
 
   const rota = selecionarRota(text, from, CONFIG);
   if (rota.ignorar) {

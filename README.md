@@ -161,7 +161,7 @@ O bot mantém dois fluxos na mesma fila:
 | Reflexões com o gatilho atual | `TARGET_GROUP_ID` | Instrução atual de `AI_PROMPT` |
 | Mensagens com o mesmo gatilho e a expressão **Curso Progressivo de Inteligência Artificial** | `IA_TARGET_GROUP_ID` ou `IA_TARGET_NUMBER` | Aula completa para leitura e narração técnica |
 
-O gatilho continua sendo “Shalom/Shalon, amado” ou “Amém, amado”, no início da mensagem. O nome do curso é reconhecido independentemente de caixa, acento em “inteligência” e quebras de linha entre as palavras. Apenas mencionar IA, GPU ou uma aula não muda o destino. A expressão completa do curso precisa constar nas aulas para identificá-las.
+O gatilho continua sendo “Shalom/Shalon, amado” ou “Amém, amado”, no início da mensagem. Se houver uma linha como “Pensou por 57s” imediatamente antes da saudação, ela é ignorada pelo filtro e removida antes da adaptação e da geração de áudio. O nome do curso é reconhecido independentemente de caixa, acento em “inteligência” e quebras de linha entre as palavras. Apenas mencionar IA, GPU ou uma aula não muda o destino. A expressão completa do curso precisa constar nas aulas para identificá-las.
 
 Configure no `.env` o remetente autorizado e o ID do grupo exclusivo das aulas. O WhatsApp conectado à Evolution API precisa participar desse grupo e ter permissão para enviar mensagens. Exemplo:
 

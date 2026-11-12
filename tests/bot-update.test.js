@@ -143,3 +143,15 @@ test('aulas vão somente ao segundo grupo quando ele está configurado, mantendo
         '120363999999999@g.us', 'grupo-atual@g.us',
     ]);
 });
+
+test('remove aviso de pensamento antes da adaptação e preserva o destino de cada fluxo', async t => {
+    const ctx = preparar(t, true, { env: { ...envCurso, IA_TARGET_GROUP_ID: '120363999999999@g.us' } });
+    ctx.concluirAtualizacao();
+    await ctx.processMessage({ ...reflexao, text: 'Pensou por 57s\n\n' + reflexao.text });
+    await ctx.processMessage({ ...aula, text: 'Pensou por 2m 10s\n' + aula.text });
+    await proximoTurno();
+    assert.deepEqual(ctx.chamadas.filter(c => c.etapa === 'ia').map(c => c.texto), [reflexao.text, aula.text]);
+    assert.deepEqual(ctx.chamadas.filter(c => c.etapa === 'envio').map(c => c.destino), [
+        'grupo-atual@g.us', '120363999999999@g.us',
+    ]);
+});

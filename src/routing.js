@@ -1,6 +1,21 @@
 /** Seleciona um único destino antes de adaptar ou gerar áudio. */
 const GATILHO = /^(shalom|shalon|amém|amem),?\s*amado/i;
 const CURSO_IA = /\bcurso\s+progressivo\s+de\s+intelig[eê]ncia\s+artificial\b/i;
+// Aviso gerado por ferramentas de IA: uma linha inteira antes da saudação.
+const DURACAO_PENSAMENTO = String.raw`\d+(?:[.,]\d+)?[ \t]*(?:h(?:oras?)?|m(?:in(?:utos?)?)?|s(?:eg(?:undos?)?)?)`;
+const AVISO_PENSOU = new RegExp(
+  String.raw`^\s*pensou[ \t]+por[ \t]+${DURACAO_PENSAMENTO}(?:[ \t]*(?:e[ \t]*)?${DURACAO_PENSAMENTO})*[ \t]*[.!:]?[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]*`,
+  'i',
+);
+
+function normalizarTextoRecebido(texto) {
+  if (typeof texto !== 'string') return texto;
+  const aviso = texto.match(AVISO_PENSOU);
+  if (!aviso) return texto;
+  const semAviso = texto.slice(aviso[0].length);
+  // Só remove a linha se ela vier imediatamente antes de uma saudação válida.
+  return GATILHO.test(semAviso.trim()) ? semAviso : texto;
+}
 
 const IA_PROMPT = `Prepare esta aula do Curso Progressivo de Inteligência Artificial para leitura e narração em português brasileiro.
 Preserve integralmente o conteúdo, a ordem das seções, os exemplos, as perguntas e respostas, os dados e a próxima aula. Não resuma, não acrescente explicações e não transforme o conteúdo em uma reflexão religiosa.
@@ -19,6 +34,7 @@ function origemPermitida(from, lista) {
 }
 
 function selecionarRota(text, from, config) {
+  text = normalizarTextoRecebido(text);
   if (typeof text !== 'string' || !text.trim()) return { ignorar: 'mensagem sem texto' };
   if (!GATILHO.test(text.trim())) return { ignorar: 'não começa com Shalom/Shalon amado ou Amém amado' };
 
@@ -44,4 +60,4 @@ function selecionarRota(text, from, config) {
   return { tipo: 'reflexão do grupo', destino: config.TARGET_GROUP_ID, prompt: config.AI_PROMPT };
 }
 
-module.exports = { selecionarRota };
+module.exports = { selecionarRota, normalizarTextoRecebido };
