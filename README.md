@@ -81,7 +81,8 @@ arauto-bot/
 ├── scripts/
 │   ├── test-ai.js         # Teste isolado da IA
 │   ├── test-speechma.js   # Teste isolado do Edge TTS
-│   └── test-tts.js        # Testa o gerador configurado, sem enviar mensagem
+│   ├── test-tts.js        # Testa o gerador configurado, sem enviar mensagem
+│   └── arauto-compose.sh  # Usa o Compose existente com o complemento de TTS
 ├── audio_output/          # MP3s gerados
 ├── logs/                  # Logs diários
 └── .env.example           # Template de configuração
@@ -190,7 +191,7 @@ Com `AUDIO_ENABLED=true`, ambos os fluxos geram áudio antes de publicar texto e
 
 ## 🎙️ Kokoro com a voz pm_santa
 
-O bot continua usando o Edge quando `TTS_PROVIDER` está ausente ou vale `edge`. Para usar o Kokoro, configure `TTS_PROVIDER=kokoro`, `KOKORO_URL` com a URL do serviço e `KOKORO_VOICE=pm_santa`. O mesmo provedor, voz e ritmo são usados para reflexões e aulas; os grupos, filtros, adaptação dos textos e fila não mudam. O Kokoro é executado no próprio computador/servidor pela CPU, sem cobrança por áudio. A velocidade de processamento e o consumo de RAM dependem do hardware e do tamanho da mensagem.
+Sem o complemento Docker, o bot usa o Edge quando `TTS_PROVIDER` está ausente ou vale `edge`/`msedge`. Para usar o Kokoro diretamente, configure `TTS_PROVIDER=kokoro`, `KOKORO_URL` com a URL do serviço e `KOKORO_VOICE=pm_santa`. Com `docker-compose.kokoro.yml`, use `AR_AUTO_TTS_PROVIDER` no `.env` do projeto Compose, como explicado abaixo. O mesmo provedor é usado para reflexões e aulas; os grupos, filtros, adaptação dos textos e fila não mudam. O Kokoro é executado no próprio computador/servidor pela CPU, sem cobrança por áudio. A velocidade de processamento e o consumo de RAM dependem do hardware e do tamanho da mensagem.
 
 O serviço [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) divide o texto para geração e retorna um MP3 completo; o bot pede português brasileiro (`lang_code=p`) e aguarda a resposta inteira antes de enviar. O limite padrão é de 30 minutos por tentativa e pode ser ajustado em `KOKORO_TIMEOUT_MS`. A falha segue as quatro tentativas e o relatório descritos abaixo: não há troca automática de voz nem envio apenas do texto.
 
@@ -208,9 +209,43 @@ O comando mostra o caminho do MP3 gerado em `audio_output/`. Se o bot e o Kokoro
 
 No Compose abaixo, adicione ou altere `KOKORO_SPEED=0.85` no `.env` usado pelo projeto da Evolution e recrie o serviço do bot com o mesmo complemento, após a fila esvaziar. Confira a configuração efetiva antes de recriar; modificar um `.env` em outra pasta não altera o container. Depois que a versão do código com essa opção estiver instalada, mudar apenas o valor não exige reconstruir a imagem.
 
+### Escolher entre Kokoro e Microsoft Edge no Docker
+
+No `.env` usado pelo projeto Compose da Evolution, defina **uma** das opções:
+
+```dotenv
+AR_AUTO_TTS_PROVIDER=kokoro
+# ou: AR_AUTO_TTS_PROVIDER=msedge
+```
+
+O padrão do complemento Docker é `kokoro`, com voz `pm_santa` e ritmo `0.65`; escolher `msedge` usa o gerador anterior e `SPEECHMA_VOICE`. O ritmo `KOKORO_SPEED` vale apenas para o Kokoro. Essa variável de escolha é específica do complemento: uma configuração antiga `TTS_PROVIDER=edge` no `.env` não troca o provedor do Compose sem que `AR_AUTO_TTS_PROVIDER` seja definido.
+
+No servidor, após instalar a versão que contém `scripts/arauto-compose.sh`, use o arquivo `.env` do projeto da Evolution (geralmente `~/dev/evolution-api/.env`). Edite-o preservando as demais linhas e deixe `AR_AUTO_TTS_PROVIDER` apenas uma vez. O script identifica o projeto e os arquivos do Compose pelo container `evolution-api-bot-1` e inclui o complemento sem duplicá-lo. Veja o provedor e a velocidade que serão aplicados sem exibir as chaves:
+
+```bash
+cd ~/dev/arauto-bot
+sudo ./scripts/arauto-compose.sh config --format json | python3 -c 'import json,sys; e=json.load(sys.stdin)["services"]["bot"]["environment"]; print("TTS_PROVIDER:", e.get("TTS_PROVIDER")); print("KOKORO_SPEED:", e.get("KOKORO_SPEED"))'
+```
+
+Se escolher Kokoro e o serviço não estiver rodando, inicie-o antes de trocar o bot:
+
+```bash
+sudo ./scripts/arauto-compose.sh up -d --wait --wait-timeout 300 --no-deps kokoro
+```
+
+Espere a fila esvaziar e aplique a escolha recriando somente o bot:
+
+```bash
+sudo ./scripts/arauto-compose.sh up -d --no-deps bot
+```
+
+Na primeira atualização do código, use `up -d --build --no-deps bot`; mudanças posteriores apenas no `.env` não exigem `--build`. Reiniciar com `restart` não aplica novas variáveis de ambiente. Depois de mudar para o Edge e confirmar que não há áudio Kokoro em processamento, você pode executar `sudo ./scripts/arauto-compose.sh stop kokoro` para liberar os recursos do serviço. Para voltar ao Kokoro, inicie-o novamente antes de recriar o bot.
+
+A escolha vale para os dois fluxos e não há mudança automática de serviço em caso de erro: as tentativas e o relatório de falha permanecem como antes.
+
 ### Testar e ativar no Compose existente
 
-O arquivo `docker-compose.kokoro.yml` é um complemento ao Compose já usado pela Evolution. Ele adiciona um serviço Kokoro somente na rede Docker e configura o bot para usar `pm_santa`. A imagem está fixada na versão `v0.10.0`; a atualização automática do `msedge-tts` não atualiza a imagem do Kokoro. Após o primeiro download, o modelo já incluído na imagem pode ser usado sem internet.
+O arquivo `docker-compose.kokoro.yml` é um complemento ao Compose já usado pela Evolution. Ele adiciona um serviço Kokoro somente na rede Docker e, por padrão, configura o bot para usar `pm_santa`. A imagem está fixada na versão `v0.10.0`; a atualização automática do `msedge-tts` não atualiza a imagem do Kokoro. Após o primeiro download, o modelo já incluído na imagem pode ser usado sem internet.
 
 Na instalação em que o container do bot se chama `evolution-api-bot-1`, execute no servidor:
 
@@ -254,7 +289,7 @@ Para conferir as variáveis efetivas sem exibir as chaves, execute:
 arauto_kokoro config --format json | python3 -c 'import json,sys; e=json.load(sys.stdin)["services"]["bot"]["environment"]; print("TTS_PROVIDER:", e.get("TTS_PROVIDER")); print("KOKORO_URL:", e.get("KOKORO_URL")); print("KOKORO_VOICE:", e.get("KOKORO_VOICE")); print("KOKORO_SPEED:", e.get("KOKORO_SPEED"))'
 ```
 
-Se o nome do container ou os caminhos forem diferentes, adapte-os antes de executar. O complemento adiciona a rede padrão ao bot e ao Kokoro; instalações que usem `network_mode` ou redes especiais devem ser ajustadas conforme sua configuração. As futuras operações do Compose devem incluir o mesmo complemento enquanto o Kokoro estiver ativo. Para voltar ao Edge, recrie o bot com seu Compose original, sem `docker-compose.kokoro.yml`; só então pare o serviço Kokoro quando não houver geração em andamento.
+Se o nome do container ou os caminhos forem diferentes, adapte-os antes de executar. O complemento adiciona a rede padrão ao bot e ao Kokoro; instalações que usem `network_mode` ou redes especiais devem ser ajustadas conforme sua configuração. As futuras operações do Compose devem incluir o mesmo complemento enquanto essa configuração estiver ativa. Use a variável de escolha acima para voltar ao Edge e pare o serviço Kokoro se não precisar dele.
 
 ## Atualizar a configuração das aulas de IA no Ubuntu Server
 
@@ -309,7 +344,8 @@ npm test
 | `IA_TARGET_NUMBER` | Telefone privado para aulas de IA, com DDI e DDD; sem ID de grupo |
 | `AUDIO_ENABLED` | `true` para texto + áudio nos dois fluxos (padrão); `false` para somente texto |
 | `ERROR_REPORT_NUMBER` | WhatsApp que recebe os relatórios de falha de áudio, com DDI e DDD, apenas dígitos |
-| `TTS_PROVIDER` | `edge` (padrão) ou `kokoro` |
+| `TTS_PROVIDER` | Provedor para execução direta: `edge`/`msedge` (padrão) ou `kokoro` |
+| `AR_AUTO_TTS_PROVIDER` | Provedor no complemento Docker: `kokoro` (padrão) ou `msedge` |
 | `KOKORO_URL` | Endereço do Kokoro-FastAPI; no Compose: `http://kokoro:8880` |
 | `KOKORO_VOICE` | Voz Kokoro (padrão: `pm_santa`) |
 | `KOKORO_SPEED` | Ritmo da fala de `0.25` a `4.0` (padrão do bot: `0.65`; normal no Kokoro: `1.0`) |

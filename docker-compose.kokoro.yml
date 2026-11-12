@@ -1,9 +1,9 @@
 # Complemento ao Compose existente da Evolution/API e do bot.
-# Ativa o Kokoro nos dois fluxos sem publicar a porta para fora do Docker.
+# Seleciona o TTS nos dois fluxos e mantém o Kokoro privado na rede Docker.
 services:
   bot:
     environment:
-      TTS_PROVIDER: kokoro
+      TTS_PROVIDER: '${AR_AUTO_TTS_PROVIDER:-kokoro}'
       KOKORO_URL: http://kokoro:8880
       KOKORO_VOICE: pm_santa
       KOKORO_SPEED: '${KOKORO_SPEED:-0.65}'

@@ -2,14 +2,14 @@
 async function generateAudio(text, messageId) {
   const provider = (process.env.TTS_PROVIDER || 'edge').trim().toLowerCase();
 
-  if (provider === 'edge') {
+  if (provider === 'edge' || provider === 'msedge' || provider === 'msedge-tts') {
     return require('./speechma').generateAudio(text, messageId);
   }
   if (provider === 'kokoro') {
     return require('./kokoro').generateAudio(text, messageId);
   }
 
-  throw new Error(`TTS_PROVIDER inválido: ${provider}. Use edge ou kokoro.`);
+  throw new Error(`TTS_PROVIDER inválido: ${provider}. Use msedge ou kokoro.`);
 }
 
 module.exports = { generateAudio };

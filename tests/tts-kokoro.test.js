@@ -154,6 +154,10 @@ test('seleciona Edge por padrão, Kokoro quando configurado e rejeita provedor d
 
   delete process.env.TTS_PROVIDER;
   assert.equal(await gerar('texto', '1'), 'speechma:texto:1');
+  for (const alias of ['edge', 'msedge', 'msedge-tts']) {
+    process.env.TTS_PROVIDER = alias;
+    assert.equal(await gerar('texto', '1'), 'speechma:texto:1');
+  }
   process.env.TTS_PROVIDER = 'kokoro';
   assert.equal(await gerar('texto', '2'), 'kokoro:texto:2');
   process.env.TTS_PROVIDER = 'outro';
