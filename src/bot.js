@@ -8,7 +8,7 @@ const { generateAudio } = require('./speechma');
 const { sendToGroup, sendText } = require('./whatsapp');
 const { log } = require('./logger');
 const { checarVersaoNova } = require('./version-check');
-const { selecionarRota, normalizarTextoRecebido } = require('./routing');
+const { selecionarRota, normalizarTextoRecebido, removerMarcadorAula } = require('./routing');
 const tempo = require('./tempo');
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
@@ -153,7 +153,8 @@ async function executarFluxo(message) {
 
     // ETAPA 1: Adaptar texto com IA (retorna versão escrita + versão narrada)
     log('🤖 Adaptando texto com IA...');
-    const resultado = await adaptTextWithAI(text, rota.prompt);
+    const textoParaAdaptar = rota.tipo === 'aula de IA' ? removerMarcadorAula(text) : text;
+    const resultado = await adaptTextWithAI(textoParaAdaptar, rota.prompt);
 
     const textoEscrito = limpar(resultado.texto);      // com "2 Reis 4:12"
     const textoNarrado = limpar(resultado.narracao);   // com "Segundo Reis, capítulo quatro..."

@@ -120,3 +120,72 @@ test('preserva texto de pensamento que não é o aviso de abertura', () => {
   const semSaudacao = 'Pensou por 57s\nBom dia!';
   assert.equal(normalizarTextoRecebido(semSaudacao), semSaudacao);
 });
+
+test('reconhece nomes alternativos do curso com a saudação habitual', () => {
+  for (const nome of ['Curso Progressivo de IA', 'curso de inteligência artificial', 'curso sobre IA']) {
+    const texto = `Shalom, amado! Hoje vamos começar o ${nome}.`;
+    assert.equal(selecionarRota(texto, origem, config).tipo, 'aula de IA', nome);
+  }
+});
+
+test('reconhece título numerado de aula com tema técnico mesmo sem nome completo do curso', () => {
+  for (const titulo of [
+    '📘 AULA 67 — COMO CONSTRUIR UM PEQUENO AGENTE DE IA?',
+    '**Aula nº 68: GPU e redes neurais**',
+    'AULA 69 — INTRODUÇÃO\nTema: modelos de linguagem e Transformers',
+    'AULA 1 — O TRANSISTOR',
+    'AULA 2 — UMA REDE NEURAL',
+    'AULA 3 — INTEGRAÇÃO COM APIS',
+  ]) {
+    assert.equal(selecionarRota('Shalom, amado!\n\n' + titulo, origem, config).tipo, 'aula de IA', titulo);
+    assert.equal(selecionarRota(titulo, origem, config).tipo, 'aula de IA', titulo);
+  }
+});
+
+test('marcador explícito permite encaminhar aula mesmo sem saudação ou palavras técnicas', () => {
+  assert.equal(selecionarRota('[AULA IA]\nAula de hoje: introdução.', origem, config).tipo, 'aula de IA');
+  assert.equal(selecionarRota('Shalom, amado! [AULA IA] Introdução.', origem, config).tipo, 'aula de IA');
+});
+
+test('reflexão que menciona aula ou IA incidentalmente continua no grupo original', () => {
+  for (const texto of [
+    'Shalom, amado! Nesta aula de fé, reflita sobre a inteligência artificial e a ética.',
+    'Shalom, amado! Na aula 5 de domingo, falamos de sabedoria e oração.',
+    'Shalom, amado! Deus é bom. Na aula 12, falamos da história.',
+    'Bom dia! Estou assistindo ao curso de inteligência artificial.',
+  ]) {
+    const rota = selecionarRota(texto, origem, config);
+    assert.notEqual(rota.tipo, 'aula de IA', texto);
+  }
+});
+
+test('dois remetentes de aulas configurados são aceitos, outros continuam bloqueados', () => {
+  const dupla = { ...config, IA_WATCH_NUMBER: '553188887777,5524999990000' };
+  assert.equal(selecionarRota(aula, origem, dupla).tipo, 'aula de IA');
+  assert.equal(selecionarRota(aula, '5524999990000@s.whatsapp.net', dupla).tipo, 'aula de IA');
+  assert.ok(selecionarRota(aula, '5511000000000@s.whatsapp.net', dupla).ignorar);
+});
+
+test('prefixo de pensamento seguido por título de aula sem saudação é removido', () => {
+  const texto = 'Pensou por 57s\n\n📘 AULA 67 — INTRODUÇÃO AOS AGENTES DE IA';
+  assert.equal(normalizarTextoRecebido(texto), '📘 AULA 67 — INTRODUÇÃO AOS AGENTES DE IA');
+  assert.equal(selecionarRota(texto, origem, config).tipo, 'aula de IA');
+});
+
+
+test('título de aula e marcador explícito continuam sujeitos aos filtros de origem e destino', () => {
+  const titulo = '📘 AULA 67 — CONSTRUINDO UM AGENTE DE IA';
+  for (const texto of [titulo, '[AULA IA]\nIntrodução']) {
+    assert.ok(selecionarRota(texto, '5511000000000@s.whatsapp.net', config).ignorar);
+    assert.ok(selecionarRota(texto, origem, { ...config, IA_TARGET_NUMBER: '' }).ignorar);
+  }
+  assert.ok(selecionarRota('[AULA IA]', origem, config).ignorar);
+});
+
+
+test('logs de filtro identificam remetente e configuração ausente para facilitar diagnóstico', () => {
+  assert.match(selecionarRota(aula, '5511000000000@s.whatsapp.net', config).ignorar, /5511000000000/);
+  const semOrigem = selecionarRota(aula, origem, { ...config, WATCH_NUMBER: '', IA_WATCH_NUMBER: '' });
+  assert.equal(semOrigem.aviso, true);
+  assert.match(semOrigem.ignorar, /IA_WATCH_NUMBER/);
+});

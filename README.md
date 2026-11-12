@@ -159,9 +159,13 @@ O bot mantém dois fluxos na mesma fila:
 | Conteúdo recebido | Destino | Adaptação |
 |---|---|---|
 | Reflexões com o gatilho atual | `TARGET_GROUP_ID` | Instrução atual de `AI_PROMPT` |
-| Mensagens com o mesmo gatilho e a expressão **Curso Progressivo de Inteligência Artificial** | `IA_TARGET_GROUP_ID` ou `IA_TARGET_NUMBER` | Aula completa para leitura e narração técnica |
+| Aulas reconhecidas pelos critérios abaixo | `IA_TARGET_GROUP_ID` ou `IA_TARGET_NUMBER` | Aula completa para leitura e narração técnica |
 
-O gatilho continua sendo “Shalom/Shalon, amado” ou “Amém, amado”, no início da mensagem. Se houver uma linha como “Pensou por 57s” imediatamente antes da saudação, ela é ignorada pelo filtro e removida antes da adaptação e da geração de áudio. O nome do curso é reconhecido independentemente de caixa, acento em “inteligência” e quebras de linha entre as palavras. Apenas mencionar IA, GPU ou uma aula não muda o destino. A expressão completa do curso precisa constar nas aulas para identificá-las.
+O bot identifica uma aula de IA quando a mensagem autorizada contém o nome do curso (como “Curso Progressivo de Inteligência Artificial”, “curso de IA” ou “curso sobre inteligência artificial”); quando tem um título numerado de aula com um tema técnico no título ou nas duas linhas seguintes; ou quando contém o marcador explícito `[AULA IA]`. Exemplos de temas aceitos incluem IA, inteligência artificial, agentes de IA, ChatGPT, Transformers, GPUs, redes neurais, programação, algoritmos e transistores.
+
+As reflexões comuns precisam começar com “Shalom/Shalon, amado” ou “Amém, amado”. Uma aula também pode começar diretamente com um título numerado reconhecido, como `📘 AULA 67 — AGENTES DE IA`, ou com `[AULA IA]`. O marcador explícito é removido antes da adaptação. Uma linha como “Pensou por 57s” imediatamente antes da saudação ou da abertura reconhecida de aula é removida antes da adaptação e da geração de áudio.
+
+Mencionar IA ou aula incidentalmente não basta para trocar a rota. A identificação é feita por regras de texto e pode falhar se a mensagem não contiver nenhum dos sinais acima; use `[AULA IA]` no início para identificar explicitamente uma aula sem um desses sinais. Mensagens enviadas pela própria conta da Evolution continuam ignoradas para evitar ciclos.
 
 Configure no `.env` o remetente autorizado e o ID do grupo exclusivo das aulas. O WhatsApp conectado à Evolution API precisa participar desse grupo e ter permissão para enviar mensagens. Exemplo:
 

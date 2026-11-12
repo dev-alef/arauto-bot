@@ -155,3 +155,14 @@ test('remove aviso de pensamento antes da adaptação e preserva o destino de ca
         'grupo-atual@g.us', '120363999999999@g.us',
     ]);
 });
+
+test('marcador de aula garante rota de IA e é removido antes do texto e do áudio', async t => {
+    const ctx = preparar(t, true, { env: { ...envCurso, IA_TARGET_GROUP_ID: '120363999999999@g.us' } });
+    ctx.concluirAtualizacao();
+    await ctx.processMessage({ ...reflexao, text: '[AULA IA]\nAula de hoje: introdução.' });
+    await proximoTurno();
+    const adaptacao = ctx.chamadas.find(c => c.etapa === 'ia');
+    assert.equal(adaptacao.texto, 'Aula de hoje: introdução.');
+    assert.match(adaptacao.prompt, /Não resuma/);
+    assert.equal(ctx.chamadas.find(c => c.etapa === 'envio').destino, '120363999999999@g.us');
+});
