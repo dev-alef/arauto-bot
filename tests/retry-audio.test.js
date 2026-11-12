@@ -26,7 +26,7 @@ function preparar(t, { falhas = Infinity, valorAleatorioMaximo = false, erroRela
     });
     simular('version-check', { checarVersaoNova: async () => {} });
     simular('ai-adapter', { adaptTextWithAI: async () => ({ texto: 'Reflexão', narracao: 'Reflexão narrada' }) });
-    simular('speechma', { generateAudio: async () => {
+    simular('tts', { generateAudio: async () => {
         resultado.tentativas++;
         if (resultado.tentativas <= falhas) throw new Error(ERRO_STREAM);
         return '/audio.mp3';

@@ -25,7 +25,7 @@ function preparar(t, audio = true, { env = {}, falharAudio = false } = {}) {
         eventos.push('ia');
         return { texto: 'Reflexão', narracao: 'Reflexão narrada' };
     } });
-    simular('speechma', { generateAudio: async (texto) => {
+    simular('tts', { generateAudio: async (texto) => {
         eventos.push('audio');
         chamadas.push({ etapa: 'audio', texto });
         if (falharAudio) throw new Error('TTS indisponível');

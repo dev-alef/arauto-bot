@@ -1,0 +1,26 @@
+# Complemento ao Compose existente da Evolution/API e do bot.
+# Ativa o Kokoro nos dois fluxos sem publicar a porta para fora do Docker.
+services:
+  bot:
+    environment:
+      TTS_PROVIDER: kokoro
+      KOKORO_URL: http://kokoro:8880
+      KOKORO_VOICE: pm_santa
+    networks:
+      default: {}
+
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.10.0
+    restart: unless-stopped
+    environment:
+      API_LOG_LEVEL: WARNING
+      ENABLE_WEB_PLAYER: 'false'
+      HF_HUB_OFFLINE: '1'
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:8880/health']
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    networks:
+      default: {}

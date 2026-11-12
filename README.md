@@ -35,7 +35,7 @@ Mensagens reflexivas recebidas no WhatsApp precisavam ser: reescritas em um tom 
 🤖 Google Gemini adapta o texto (com sanitização anti-rubricas de TTS)
         │
         ▼
-🎙️ Microsoft Edge TTS gera o áudio em voz neural PT-BR
+🎙️ Edge TTS ou Kokoro gera o áudio em voz PT-BR
         │
         ▼
 📤 Texto adaptado + mensagem de voz são publicados no grupo
@@ -49,7 +49,7 @@ Mensagens reflexivas recebidas no WhatsApp precisavam ser: reescritas em um tom 
 | Servidor | **Express** | Endpoint de webhook |
 | WhatsApp | **Evolution API v2** (Baileys) | Conexão, recepção e envio |
 | IA | **Google Gemini 2.5 Flash** | Adaptação do texto (com retry/backoff) |
-| TTS | **msedge-tts** | Voz neural (pt-BR-AntonioNeural) |
+| TTS | **msedge-tts** ou **Kokoro-FastAPI** | Voz Edge ou Kokoro local, configurável |
 | Banco | **PostgreSQL 15** | Persistência da sessão/instância |
 | Cache | **Redis 7** | Cache da Evolution API |
 | Infra | **Docker** | Containers com restart automático |
@@ -74,11 +74,14 @@ arauto-bot/
 │   ├── routing.js         # Reflexões no grupo; aulas de IA em outro grupo ou contato
 │   ├── ai-adapter.js      # Integração com Google Gemini (com retry)
 │   ├── speechma.js        # Geração de áudio (msedge-tts)
+│   ├── kokoro.js          # Geração de áudio no serviço Kokoro local
+│   ├── tts.js             # Escolha do gerador de áudio
 │   ├── whatsapp.js        # Cliente da Evolution API (texto + áudio PTT)
 │   └── logger.js          # Logs com timestamp em arquivo diário
 ├── scripts/
 │   ├── test-ai.js         # Teste isolado da IA
-│   └── test-speechma.js   # Teste isolado do TTS
+│   ├── test-speechma.js   # Teste isolado do Edge TTS
+│   └── test-tts.js        # Testa o gerador configurado, sem enviar mensagem
 ├── audio_output/          # MP3s gerados
 ├── logs/                  # Logs diários
 └── .env.example           # Template de configuração
@@ -185,7 +188,65 @@ A aula tem prioridade sobre o fluxo do grupo e recebe um único destino. Sem des
 
 Com `AUDIO_ENABLED=true`, ambos os fluxos geram áudio antes de publicar texto e áudio. Se a geração do áudio falhar, o bot faz até três novas tentativas, com intervalo aleatório de 3 a 5 minutos. Se todas falharem, a reflexão não é publicada e um relatório é enviado ao número em `ERROR_REPORT_NUMBER`. A atualização automática do TTS é verificada nos dois fluxos.
 
-### Atualizar uma instalação existente no Ubuntu Server
+## 🎙️ Kokoro com a voz pm_santa
+
+O bot continua usando o Edge quando `TTS_PROVIDER` está ausente ou vale `edge`. Para usar o Kokoro, configure `TTS_PROVIDER=kokoro`, `KOKORO_URL` com a URL do serviço e `KOKORO_VOICE=pm_santa`. O mesmo provedor e voz são usados para reflexões e aulas; os grupos, filtros, adaptação dos textos e fila não mudam. O Kokoro é executado no próprio computador/servidor pela CPU, sem cobrança por áudio. A velocidade e o consumo de RAM dependem do hardware e do tamanho da mensagem.
+
+O serviço [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) divide o texto para geração e retorna um MP3 completo; o bot pede português brasileiro (`lang_code=p`) e aguarda a resposta inteira antes de enviar. O limite padrão é de 30 minutos por tentativa e pode ser ajustado em `KOKORO_TIMEOUT_MS`. A falha segue as quatro tentativas e o relatório descritos abaixo: não há troca automática de voz nem envio apenas do texto.
+
+Para testar com um serviço já disponível, sem enviar mensagens no WhatsApp:
+
+```bash
+TTS_PROVIDER=kokoro KOKORO_URL=http://127.0.0.1:8880 KOKORO_VOICE=pm_santa npm run test:tts
+```
+
+O comando mostra o caminho do MP3 gerado em `audio_output/`. Se o bot e o Kokoro estiverem em containers diferentes, `127.0.0.1` aponta para o próprio container do bot, não para o Kokoro: use o nome do serviço na rede Docker, como na configuração abaixo.
+
+### Testar e ativar no Compose existente
+
+O arquivo `docker-compose.kokoro.yml` é um complemento ao Compose já usado pela Evolution. Ele adiciona um serviço Kokoro somente na rede Docker e configura o bot para usar `pm_santa`. A imagem está fixada na versão `v0.10.0`; a atualização automática do `msedge-tts` não atualiza a imagem do Kokoro. Após o primeiro download, o modelo já incluído na imagem pode ser usado sem internet.
+
+Na instalação em que o container do bot se chama `evolution-api-bot-1`, execute no servidor:
+
+```bash
+cd ~/dev/arauto-bot
+git pull --ff-only origin main
+
+cd ~/dev/evolution-api
+# Reutiliza os mesmos arquivos e nome de projeto do Compose que iniciou o bot.
+AR_AUTO_COMPOSE_PATHS="$(sudo docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' evolution-api-bot-1)"
+AR_AUTO_PROJECT="$(sudo docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' evolution-api-bot-1)"
+AR_AUTO_COMPOSE_FILE="${AR_AUTO_COMPOSE_PATHS//,/:}:$HOME/dev/arauto-bot/docker-compose.kokoro.yml"
+
+arauto_kokoro() {
+  sudo env COMPOSE_FILE="$AR_AUTO_COMPOSE_FILE" docker compose -p "$AR_AUTO_PROJECT" "$@"
+}
+
+# Valida a configuração, baixa/inicia o Kokoro e constrói a nova imagem do bot.
+arauto_kokoro config --quiet
+arauto_kokoro up -d --wait --wait-timeout 300 --no-deps kokoro
+arauto_kokoro build bot
+
+# Executa apenas o gerador numa instância temporária: não envia mensagens.
+arauto_kokoro run --rm --no-deps bot node scripts/test-tts.js
+```
+
+O teste informa o caminho do arquivo dentro de `/app/audio_output`, no volume de áudio. O bot que já estava em produção ainda não foi recriado. Se o teste funcionar, espere a fila esvaziar e ative o código e as variáveis no bot:
+
+```bash
+arauto_kokoro up -d --no-deps bot
+arauto_kokoro logs -f --tail 50 bot
+```
+
+Para conferir as três variáveis efetivas sem exibir as chaves, execute:
+
+```bash
+arauto_kokoro config --format json | python3 -c 'import json,sys; e=json.load(sys.stdin)["services"]["bot"]["environment"]; print("TTS_PROVIDER:", e.get("TTS_PROVIDER")); print("KOKORO_URL:", e.get("KOKORO_URL")); print("KOKORO_VOICE:", e.get("KOKORO_VOICE"))'
+```
+
+Se o nome do container ou os caminhos forem diferentes, adapte-os antes de executar. O complemento adiciona a rede padrão ao bot e ao Kokoro; instalações que usem `network_mode` ou redes especiais devem ser ajustadas conforme sua configuração. As futuras operações do Compose devem incluir o mesmo complemento enquanto o Kokoro estiver ativo. Para voltar ao Edge, recrie o bot com seu Compose original, sem `docker-compose.kokoro.yml`; só então pare o serviço Kokoro quando não houver geração em andamento.
+
+## Atualizar a configuração das aulas de IA no Ubuntu Server
 
 Esta alteração não exige migração de banco nem recriação de PostgreSQL, Redis ou Evolution API. Se o bot já recebe e envia mensagens, mantenha as configurações atuais de conexão, instância, webhook e grupo.
 
@@ -209,7 +270,7 @@ A fila e as esperas ficam na memória: reiniciar o bot durante o processamento p
 
 ## 🔄 Atualização automática do Microsoft Edge TTS
 
-Antes de processar cada reflexão válida, o bot consulta a versão estável `latest` do pacote [msedge-tts](https://github.com/Migushthe2nd/MsEdgeTTS) no npm. Se houver uma versão superior à ativa, aguarda a instalação e passa a usá-la no áudio daquela reflexão, sem reiniciar o processo. A checagem também acontece quando `AUDIO_ENABLED=false`; mensagens descartadas pelos filtros não consultam o npm.
+Antes de processar cada reflexão válida, o bot consulta a versão estável `latest` do pacote [msedge-tts](https://github.com/Migushthe2nd/MsEdgeTTS) no npm. Se houver uma versão superior à ativa, aguarda a instalação e passa a usá-la no áudio daquela reflexão quando o provedor é `edge`, sem reiniciar o processo. A checagem também acontece com Kokoro e quando `AUDIO_ENABLED=false`; mensagens descartadas pelos filtros não consultam o npm. O Kokoro é uma imagem separada e não é atualizado por essa checagem.
 
 As versões são instaladas em `.tts-runtime/`, isoladas das dependências originais. A versão ativa é salva para os próximos reinícios. O bot valida a interface usada pelo gerador antes de ativar a atualização; isso não garante que futuras versões mantenham todo o comportamento do serviço. As atualizações seguem as versões estáveis publicadas no npm, incluindo versões principais, e não cada commit do GitHub.
 
@@ -238,7 +299,11 @@ npm test
 | `IA_TARGET_NUMBER` | Telefone privado para aulas de IA, com DDI e DDD; sem ID de grupo |
 | `AUDIO_ENABLED` | `true` para texto + áudio nos dois fluxos (padrão); `false` para somente texto |
 | `ERROR_REPORT_NUMBER` | WhatsApp que recebe os relatórios de falha de áudio, com DDI e DDD, apenas dígitos |
-| `SPEECHMA_VOICE` | Voz neural (padrão: `pt-BR-AntonioNeural`) |
+| `TTS_PROVIDER` | `edge` (padrão) ou `kokoro` |
+| `KOKORO_URL` | Endereço do Kokoro-FastAPI; no Compose: `http://kokoro:8880` |
+| `KOKORO_VOICE` | Voz Kokoro (padrão: `pm_santa`) |
+| `KOKORO_TIMEOUT_MS` | Limite por tentativa em milissegundos (padrão: `1800000`) |
+| `SPEECHMA_VOICE` | Voz neural do Edge (padrão: `pt-BR-AntonioNeural`) |
 | `WEBHOOK_TOKEN` | Token de segurança do webhook |
 | `AI_PROMPT` | Instrução de adaptação do texto |
 

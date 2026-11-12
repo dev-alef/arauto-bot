@@ -4,7 +4,7 @@
  */
 
 const { adaptTextWithAI } = require('./ai-adapter');
-const { generateAudio } = require('./speechma');
+const { generateAudio } = require('./tts');
 const { sendToGroup, sendText } = require('./whatsapp');
 const { log } = require('./logger');
 const { checarVersaoNova } = require('./version-check');
