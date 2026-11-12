@@ -17,6 +17,7 @@ async function prepararServidor(t, responder) {
   const variaveis = {
     KOKORO_URL: `http://127.0.0.1:${server.address().port}/`,
     KOKORO_VOICE: 'pm_santa',
+    KOKORO_SPEED: '1',
     KOKORO_TIMEOUT_MS: '5000',
   };
   for (const [nome, valor] of Object.entries(variaveis)) {
@@ -49,10 +50,36 @@ test('Kokoro recebe todo o texto em português, com pm_santa e resposta completa
   const arquivo = await generateAudio(texto, '../mensagem', { audioDir });
   assert.deepEqual(pedido, {
     method: 'POST', url: '/v1/audio/speech',
-    body: { model: 'kokoro', input: texto, voice: 'pm_santa', lang_code: 'p', response_format: 'mp3', stream: false },
+    body: { model: 'kokoro', input: texto, voice: 'pm_santa', lang_code: 'p', response_format: 'mp3', speed: 1, stream: false },
   });
   assert.equal(path.dirname(arquivo), audioDir);
   assert.deepEqual(await fs.readFile(arquivo), mp3);
+});
+
+test('encaminha ao Kokoro a velocidade configurada, inclusive com vírgula decimal', async t => {
+  let pedido;
+  const audioDir = await prepararServidor(t, async (req, res) => {
+    let corpo = '';
+    for await (const parte of req) corpo += parte;
+    pedido = JSON.parse(corpo);
+    res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
+    res.end(Buffer.concat([Buffer.from('ID3'), Buffer.alloc(512, 1)]));
+  });
+  process.env.KOKORO_SPEED = '0,85';
+  await generateAudio('Teste de velocidade.', '1', { audioDir });
+  assert.equal(pedido.speed, 0.85);
+  assert.equal(pedido.voice, 'pm_santa');
+});
+
+test('velocidade inválida falha antes de gerar ou salvar áudio', async t => {
+  let requisicoes = 0;
+  const audioDir = await prepararServidor(t, () => { requisicoes++; });
+  for (const valor of ['0', '4.1', 'lenta']) {
+    process.env.KOKORO_SPEED = valor;
+    await assert.rejects(generateAudio('Teste.', '1', { audioDir }), /KOKORO_SPEED inválida/);
+  }
+  assert.equal(requisicoes, 0);
+  assert.deepEqual(await fs.readdir(audioDir), []);
 });
 
 test('erro HTTP do Kokoro é propagado sem criar arquivo de áudio', async t => {

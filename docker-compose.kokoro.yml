@@ -6,6 +6,7 @@ services:
       TTS_PROVIDER: kokoro
       KOKORO_URL: http://kokoro:8880
       KOKORO_VOICE: pm_santa
+      KOKORO_SPEED: '${KOKORO_SPEED:-1.0}'
     networks:
       default: {}
 

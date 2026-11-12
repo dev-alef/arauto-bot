@@ -190,7 +190,7 @@ Com `AUDIO_ENABLED=true`, ambos os fluxos geram áudio antes de publicar texto e
 
 ## 🎙️ Kokoro com a voz pm_santa
 
-O bot continua usando o Edge quando `TTS_PROVIDER` está ausente ou vale `edge`. Para usar o Kokoro, configure `TTS_PROVIDER=kokoro`, `KOKORO_URL` com a URL do serviço e `KOKORO_VOICE=pm_santa`. O mesmo provedor e voz são usados para reflexões e aulas; os grupos, filtros, adaptação dos textos e fila não mudam. O Kokoro é executado no próprio computador/servidor pela CPU, sem cobrança por áudio. A velocidade e o consumo de RAM dependem do hardware e do tamanho da mensagem.
+O bot continua usando o Edge quando `TTS_PROVIDER` está ausente ou vale `edge`. Para usar o Kokoro, configure `TTS_PROVIDER=kokoro`, `KOKORO_URL` com a URL do serviço e `KOKORO_VOICE=pm_santa`. O mesmo provedor, voz e ritmo são usados para reflexões e aulas; os grupos, filtros, adaptação dos textos e fila não mudam. O Kokoro é executado no próprio computador/servidor pela CPU, sem cobrança por áudio. A velocidade de processamento e o consumo de RAM dependem do hardware e do tamanho da mensagem.
 
 O serviço [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) divide o texto para geração e retorna um MP3 completo; o bot pede português brasileiro (`lang_code=p`) e aguarda a resposta inteira antes de enviar. O limite padrão é de 30 minutos por tentativa e pode ser ajustado em `KOKORO_TIMEOUT_MS`. A falha segue as quatro tentativas e o relatório descritos abaixo: não há troca automática de voz nem envio apenas do texto.
 
@@ -201,6 +201,12 @@ TTS_PROVIDER=kokoro KOKORO_URL=http://127.0.0.1:8880 KOKORO_VOICE=pm_santa npm r
 ```
 
 O comando mostra o caminho do MP3 gerado em `audio_output/`. Se o bot e o Kokoro estiverem em containers diferentes, `127.0.0.1` aponta para o próprio container do bot, não para o Kokoro: use o nome do serviço na rede Docker, como na configuração abaixo.
+
+### Velocidade da fala
+
+`KOKORO_SPEED` controla o ritmo: `1.0` é o padrão, `0.85` é mais lento e `1.15` é mais rápido. São aceitos valores de `0.25` a `4.0`; valores extremos podem soar pouco naturais. O bot também aceita vírgula decimal. Sem essa variável, mantém o ritmo padrão (`1.0`).
+
+No Compose abaixo, adicione ou altere `KOKORO_SPEED=0.85` no `.env` usado pelo projeto da Evolution e recrie o serviço do bot com o mesmo complemento, após a fila esvaziar. Confira a configuração efetiva antes de recriar; modificar um `.env` em outra pasta não altera o container. Depois que a versão do código com essa opção estiver instalada, mudar apenas o valor não exige reconstruir a imagem.
 
 ### Testar e ativar no Compose existente
 
@@ -238,10 +244,10 @@ arauto_kokoro up -d --no-deps bot
 arauto_kokoro logs -f --tail 50 bot
 ```
 
-Para conferir as três variáveis efetivas sem exibir as chaves, execute:
+Para conferir as variáveis efetivas sem exibir as chaves, execute:
 
 ```bash
-arauto_kokoro config --format json | python3 -c 'import json,sys; e=json.load(sys.stdin)["services"]["bot"]["environment"]; print("TTS_PROVIDER:", e.get("TTS_PROVIDER")); print("KOKORO_URL:", e.get("KOKORO_URL")); print("KOKORO_VOICE:", e.get("KOKORO_VOICE"))'
+arauto_kokoro config --format json | python3 -c 'import json,sys; e=json.load(sys.stdin)["services"]["bot"]["environment"]; print("TTS_PROVIDER:", e.get("TTS_PROVIDER")); print("KOKORO_URL:", e.get("KOKORO_URL")); print("KOKORO_VOICE:", e.get("KOKORO_VOICE")); print("KOKORO_SPEED:", e.get("KOKORO_SPEED"))'
 ```
 
 Se o nome do container ou os caminhos forem diferentes, adapte-os antes de executar. O complemento adiciona a rede padrão ao bot e ao Kokoro; instalações que usem `network_mode` ou redes especiais devem ser ajustadas conforme sua configuração. As futuras operações do Compose devem incluir o mesmo complemento enquanto o Kokoro estiver ativo. Para voltar ao Edge, recrie o bot com seu Compose original, sem `docker-compose.kokoro.yml`; só então pare o serviço Kokoro quando não houver geração em andamento.
@@ -302,6 +308,7 @@ npm test
 | `TTS_PROVIDER` | `edge` (padrão) ou `kokoro` |
 | `KOKORO_URL` | Endereço do Kokoro-FastAPI; no Compose: `http://kokoro:8880` |
 | `KOKORO_VOICE` | Voz Kokoro (padrão: `pm_santa`) |
+| `KOKORO_SPEED` | Ritmo da fala de `0.25` a `4.0` (padrão: `1.0`) |
 | `KOKORO_TIMEOUT_MS` | Limite por tentativa em milissegundos (padrão: `1800000`) |
 | `SPEECHMA_VOICE` | Voz neural do Edge (padrão: `pt-BR-AntonioNeural`) |
 | `WEBHOOK_TOKEN` | Token de segurança do webhook |
