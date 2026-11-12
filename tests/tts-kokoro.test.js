@@ -71,6 +71,20 @@ test('encaminha ao Kokoro a velocidade configurada, inclusive com vírgula decim
   assert.equal(pedido.voice, 'pm_santa');
 });
 
+test('sem velocidade configurada usa o ritmo escolhido de 0.65', async t => {
+  let pedido;
+  const audioDir = await prepararServidor(t, async (req, res) => {
+    let corpo = '';
+    for await (const parte of req) corpo += parte;
+    pedido = JSON.parse(corpo);
+    res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
+    res.end(Buffer.concat([Buffer.from('ID3'), Buffer.alloc(512, 1)]));
+  });
+  delete process.env.KOKORO_SPEED;
+  await generateAudio('Teste de velocidade padrão.', '1', { audioDir });
+  assert.equal(pedido.speed, 0.65);
+});
+
 test('velocidade inválida falha antes de gerar ou salvar áudio', async t => {
   let requisicoes = 0;
   const audioDir = await prepararServidor(t, () => { requisicoes++; });

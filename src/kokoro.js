@@ -14,7 +14,7 @@ async function generateAudio(text, messageId = 'mensagem', { audioDir = AUDIO_DI
   const baseUrl = (process.env.KOKORO_URL || 'http://127.0.0.1:8880').replace(/\/+$/, '');
   const voice = (process.env.KOKORO_VOICE || 'pm_santa').trim();
   const timeout = Number(process.env.KOKORO_TIMEOUT_MS || TIMEOUT_PADRAO_MS);
-  const velocidadeConfigurada = (process.env.KOKORO_SPEED || '1').trim().replace(',', '.');
+  const velocidadeConfigurada = (process.env.KOKORO_SPEED || '0.65').trim().replace(',', '.');
   const speed = Number(velocidadeConfigurada);
   if (!voice || !Number.isSafeInteger(timeout) || timeout <= 0 || timeout > 2147483647) {
     throw new Error('Configuração inválida de KOKORO_VOICE ou KOKORO_TIMEOUT_MS.');

@@ -204,7 +204,7 @@ O comando mostra o caminho do MP3 gerado em `audio_output/`. Se o bot e o Kokoro
 
 ### Velocidade da fala
 
-`KOKORO_SPEED` controla o ritmo: `1.0` é o padrão, `0.85` é mais lento e `1.15` é mais rápido. São aceitos valores de `0.25` a `4.0`; valores extremos podem soar pouco naturais. O bot também aceita vírgula decimal. Sem essa variável, mantém o ritmo padrão (`1.0`).
+`KOKORO_SPEED` controla o ritmo: o padrão escolhido para o bot é `0.65`; `1.0` corresponde ao ritmo normal do Kokoro, `0.85` é mais lento e `1.15` é mais rápido. São aceitos valores de `0.25` a `4.0`; valores extremos podem soar pouco naturais. O bot também aceita vírgula decimal. Sem essa variável, usa `0.65`.
 
 No Compose abaixo, adicione ou altere `KOKORO_SPEED=0.85` no `.env` usado pelo projeto da Evolution e recrie o serviço do bot com o mesmo complemento, após a fila esvaziar. Confira a configuração efetiva antes de recriar; modificar um `.env` em outra pasta não altera o container. Depois que a versão do código com essa opção estiver instalada, mudar apenas o valor não exige reconstruir a imagem.
 
@@ -222,7 +222,11 @@ cd ~/dev/evolution-api
 # Reutiliza os mesmos arquivos e nome de projeto do Compose que iniciou o bot.
 AR_AUTO_COMPOSE_PATHS="$(sudo docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' evolution-api-bot-1)"
 AR_AUTO_PROJECT="$(sudo docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' evolution-api-bot-1)"
-AR_AUTO_COMPOSE_FILE="${AR_AUTO_COMPOSE_PATHS//,/:}:$HOME/dev/arauto-bot/docker-compose.kokoro.yml"
+AR_AUTO_COMPOSE_FILE="${AR_AUTO_COMPOSE_PATHS//,/:}"
+case ":$AR_AUTO_COMPOSE_FILE:" in
+  *":$HOME/dev/arauto-bot/docker-compose.kokoro.yml:"*) ;;
+  *) AR_AUTO_COMPOSE_FILE="$AR_AUTO_COMPOSE_FILE:$HOME/dev/arauto-bot/docker-compose.kokoro.yml" ;;
+esac
 
 arauto_kokoro() {
   sudo env COMPOSE_FILE="$AR_AUTO_COMPOSE_FILE" docker compose -p "$AR_AUTO_PROJECT" "$@"
@@ -308,7 +312,7 @@ npm test
 | `TTS_PROVIDER` | `edge` (padrão) ou `kokoro` |
 | `KOKORO_URL` | Endereço do Kokoro-FastAPI; no Compose: `http://kokoro:8880` |
 | `KOKORO_VOICE` | Voz Kokoro (padrão: `pm_santa`) |
-| `KOKORO_SPEED` | Ritmo da fala de `0.25` a `4.0` (padrão: `1.0`) |
+| `KOKORO_SPEED` | Ritmo da fala de `0.25` a `4.0` (padrão do bot: `0.65`; normal no Kokoro: `1.0`) |
 | `KOKORO_TIMEOUT_MS` | Limite por tentativa em milissegundos (padrão: `1800000`) |
 | `SPEECHMA_VOICE` | Voz neural do Edge (padrão: `pt-BR-AntonioNeural`) |
 | `WEBHOOK_TOKEN` | Token de segurança do webhook |
