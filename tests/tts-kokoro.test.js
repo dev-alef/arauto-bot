@@ -120,7 +120,10 @@ test('conexão interrompida durante o áudio falha sem deixar arquivo incompleto
     res.write(Buffer.concat([Buffer.from('ID3'), Buffer.alloc(512, 1)]));
     setImmediate(() => res.destroy());
   });
-  await assert.rejects(generateAudio('Teste.', '1', { audioDir }));
+  await assert.rejects(generateAudio('Teste.', '1', { audioDir }), error => {
+    assert.doesNotMatch(error.message, /Tempo limite/);
+    return true;
+  });
   assert.deepEqual(await fs.readdir(audioDir), []);
 });
 
@@ -129,6 +132,53 @@ test('uma geração que não responde respeita o tempo limite', async t => {
   process.env.KOKORO_TIMEOUT_MS = '50';
   await assert.rejects(generateAudio('Teste.', '1', { audioDir }), /Tempo limite de 50 ms/);
   assert.deepEqual(await fs.readdir(audioDir), []);
+});
+
+test('o tempo limite também interrompe uma resposta de áudio incompleta', async t => {
+  const audioDir = await prepararServidor(t, (req, res) => {
+    res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
+    res.write(Buffer.from('ID3'));
+  });
+  process.env.KOKORO_TIMEOUT_MS = '100';
+  await assert.rejects(generateAudio('Teste.', '1', { audioDir }), /Tempo limite de 100 ms/);
+  assert.deepEqual(await fs.readdir(audioDir), []);
+});
+
+test('aguarda o Kokoro mesmo quando o fetch global possui limite de cabeçalhos menor', async t => {
+  const mp3 = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(512, 1)]);
+  const audioDir = await prepararServidor(t, (req, res) => {
+    if (req.url === '/aquecer') {
+      res.end('ok');
+      return;
+    }
+    const timer = setTimeout(() => {
+      res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
+      res.end(mp3);
+    }, 2500);
+    res.on('close', () => clearTimeout(timer));
+    req.resume();
+  });
+
+  // Aquece o fetch nativo e reduz seu limite em vez de aguardar cinco minutos.
+  const fetchOriginal = globalThis.fetch;
+  await fetchOriginal(new URL('/aquecer', process.env.KOKORO_URL));
+  const dispatcherOriginal = globalThis[Symbol.for('undici.globalDispatcher.1')];
+  if (!dispatcherOriginal) {
+    t.skip('O dispatcher do fetch nativo não está disponível neste Node.');
+    return;
+  }
+  const dispatcher = {
+    dispatch(options, handler) {
+      return dispatcherOriginal.dispatch({ ...options, headersTimeout: 100 }, handler);
+    },
+  };
+  globalThis.fetch = (url, options) => fetchOriginal(url, { ...options, dispatcher });
+  t.after(() => { globalThis.fetch = fetchOriginal; });
+  process.env.KOKORO_SPEED = '0.55';
+  process.env.KOKORO_TIMEOUT_MS = '10000';
+
+  const arquivo = await generateAudio('Texto aguardando resposta do Kokoro.', '1', { audioDir });
+  assert.deepEqual(await fs.readFile(arquivo), mp3);
 });
 
 test('seleciona Edge por padrão, Kokoro quando configurado e rejeita provedor desconhecido', async t => {
