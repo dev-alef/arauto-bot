@@ -17,3 +17,6 @@ Thumbs.db
 
 # Versões do TTS instaladas automaticamente
 .tts-runtime/
+
+# Configuração local para recuperação da troca CPU/GPU
+.arauto-state/

@@ -1,0 +1,52 @@
+# Opcional: sobrepõe o Kokoro CPU e disponibiliza métricas à aplicação.
+# Use pelo scripts/arauto-compose.sh --kokoro-gpu; o modo CPU não requer GPU.
+services:
+  bot:
+    environment:
+      AR_AUTO_KOKORO_DEVICE: gpu
+      AR_AUTO_GPU_METRICS_URL: http://arauto-gpu-metrics:9988/metrics
+
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-gpu:v0.10.0-cu126
+    runtime: nvidia
+    mem_limit: '${AR_AUTO_KOKORO_GPU_MEM_LIMIT:-2500m}'
+    memswap_limit: '${AR_AUTO_KOKORO_GPU_MEM_LIMIT:-2500m}'
+    environment:
+      DEVICE_TYPE: cuda
+      USE_GPU: 'true'
+      DOWNLOAD_MODEL: 'false'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  arauto-gpu-metrics:
+    image: ghcr.io/remsky/kokoro-fastapi-gpu:v0.10.0-cu126
+    runtime: nvidia
+    restart: unless-stopped
+    entrypoint: ['/app/.venv/bin/python', '-u', '/opt/arauto/gpu-metrics.py']
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: utility
+    volumes:
+      - type: bind
+        source: '${AR_AUTO_REPO_DIR:?Use o scripts/arauto-compose.sh}/scripts/gpu-metrics.py'
+        target: /opt/arauto/gpu-metrics.py
+        read_only: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ['CMD', '/app/.venv/bin/python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:9988/metrics", timeout=2).read()']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      default: {}

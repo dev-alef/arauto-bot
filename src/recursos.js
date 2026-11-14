@@ -1,8 +1,50 @@
 /** Leituras locais de recursos, sem acesso ao socket do Docker. */
 const os = require('os');
 const { execFile } = require('child_process');
+const http = require('http');
+const https = require('https');
 
-function criarLeitorRecursos({ listarCpus = os.cpus, executarNvidia = execFile, agora = Date.now } = {}) {
+function lerGpuRemota(endereco) {
+  return new Promise(resolve => {
+    let pedido;
+    let finalizado = false;
+    let limite;
+    const concluir = valor => {
+      if (finalizado) return;
+      finalizado = true;
+      clearTimeout(limite);
+      resolve(valor);
+    };
+    limite = setTimeout(() => { pedido?.destroy(); concluir(null); }, 1500);
+    limite.unref();
+    try {
+      const url = new URL(endereco);
+      const cliente = url.protocol === 'http:' ? http : url.protocol === 'https:' ? https : null;
+      if (!cliente) return concluir(null);
+      pedido = cliente.get(url, resposta => {
+        if (resposta.statusCode !== 200) {
+          resposta.resume();
+          return concluir(null);
+        }
+        let texto = '';
+        resposta.setEncoding('utf8');
+        resposta.on('data', parte => {
+          texto += parte;
+          if (Buffer.byteLength(texto) > 4096) {
+            pedido.destroy();
+            concluir(null);
+          }
+        });
+        resposta.on('end', () => concluir(texto));
+        resposta.on('error', () => concluir(null));
+      });
+      pedido.on('error', () => concluir(null));
+    } catch { concluir(null); }
+  });
+}
+
+function criarLeitorRecursos({ listarCpus = os.cpus, executarNvidia = execFile, agora = Date.now,
+  enderecoGpu = process.env.AR_AUTO_GPU_METRICS_URL || '' } = {}) {
   let anterior = null;
   let ultimoGpu = 0;
   let gpu = null;
@@ -28,15 +70,20 @@ function criarLeitorRecursos({ listarCpus = os.cpus, executarNvidia = execFile, 
       const argumentos = ['--query-gpu=utilization.gpu,memory.used,memory.total', '--format=csv,noheader,nounits'];
       const finalizar = (erro, saida = '') => {
         ultimoGpu = agora();
-        const campos = String(saida).split('\n')[0].split(',').map(v => Number(v.trim()));
-        gpu = !erro && campos.length === 3 && campos.every(Number.isFinite) &&
+        const textos = String(saida).split('\n')[0].split(',').map(v => v.trim());
+        const campos = textos.map(Number);
+        gpu = !erro && campos.length === 3 && textos.every(Boolean) && campos.every(Number.isFinite) &&
           campos[0] >= 0 && campos[0] <= 100 && campos[1] >= 0 && campos[2] > 0 && campos[1] <= campos[2]
           ? { usoPercentual: campos[0], memoriaUsadaMiB: campos[1], memoriaTotalMiB: campos[2] }
           : null;
         resolve(gpu);
       };
-      try { executarNvidia('nvidia-smi', argumentos, { timeout: 1500, maxBuffer: 4096 }, finalizar); }
-      catch { finalizar(true); }
+      if (enderecoGpu) {
+        lerGpuRemota(enderecoGpu).then(saida => finalizar(saida === null, saida || ''));
+      } else {
+        try { executarNvidia('nvidia-smi', argumentos, { timeout: 1500, maxBuffer: 4096 }, finalizar); }
+        catch { finalizar(true); }
+      }
     });
     try { return await consultaPendente; } finally { consultaPendente = null; }
   }

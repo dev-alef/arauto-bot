@@ -191,7 +191,7 @@ Com `AUDIO_ENABLED=true`, ambos os fluxos geram áudio antes de publicar texto e
 
 ## 🎙️ Kokoro com a voz pm_santa
 
-Sem o complemento Docker, o bot usa o Edge quando `TTS_PROVIDER` está ausente ou vale `edge`/`msedge`. Para usar o Kokoro diretamente, configure `TTS_PROVIDER=kokoro`, `KOKORO_URL` com a URL do serviço e `KOKORO_VOICE=pm_santa`. Com `docker-compose.kokoro.yml`, use `AR_AUTO_TTS_PROVIDER` no `.env` do projeto Compose, como explicado abaixo. O mesmo provedor é usado para reflexões e aulas; os grupos, filtros, adaptação dos textos e fila não mudam. O Kokoro é executado no próprio computador/servidor pela CPU, sem cobrança por áudio. A velocidade de processamento e o consumo de RAM dependem do hardware e do tamanho da mensagem.
+Sem o complemento Docker, o bot usa o Edge quando `TTS_PROVIDER` está ausente ou vale `edge`/`msedge`. Para usar o Kokoro diretamente, configure `TTS_PROVIDER=kokoro`, `KOKORO_URL` com a URL do serviço e `KOKORO_VOICE=pm_santa`. Com `docker-compose.kokoro.yml`, use `AR_AUTO_TTS_PROVIDER` no `.env` do projeto Compose, como explicado abaixo. O mesmo provedor é usado para reflexões e aulas; os grupos, filtros, adaptação dos textos e fila não mudam. O Kokoro é executado no próprio computador/servidor, sem cobrança por áudio: por padrão usa CPU e pode usar GPU NVIDIA com o complemento opcional. A velocidade de processamento e o consumo de RAM dependem do hardware e do tamanho da mensagem.
 
 O serviço [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) divide o texto para geração e retorna um MP3 completo; o bot pede português brasileiro (`lang_code=p`) e aguarda a resposta inteira antes de enviar. O limite padrão é de 30 minutos por tentativa e pode ser ajustado em `KOKORO_TIMEOUT_MS`. A falha segue as quatro tentativas e o relatório descritos abaixo: não há troca automática de voz nem envio apenas do texto.
 
@@ -242,6 +242,32 @@ sudo ./scripts/arauto-compose.sh up -d --no-deps bot
 Na primeira atualização do código, use `up -d --build --no-deps bot`; mudanças posteriores apenas no `.env` não exigem `--build`. Reiniciar com `restart` não aplica novas variáveis de ambiente. Depois de mudar para o Edge e confirmar que não há áudio Kokoro em processamento, você pode executar `sudo ./scripts/arauto-compose.sh stop kokoro` para liberar os recursos do serviço. Para voltar ao Kokoro, inicie-o novamente antes de recriar o bot.
 
 A escolha vale para os dois fluxos e não há mudança automática de serviço em caso de erro: as tentativas e o relatório de falha permanecem como antes.
+
+### Kokoro opcional com GPU NVIDIA
+
+O padrão continua sendo a imagem CPU. O complemento `docker-compose.kokoro-gpu.yml` substitui apenas o serviço Kokoro pela imagem `v0.10.0-cu126`, pede uma GPU NVIDIA e mantém a voz, a velocidade, os destinos e as demais opções. A variante cu126 foi escolhida por também contemplar placas Maxwell, como a GeForce 940MX. O driver NVIDIA e o NVIDIA Container Toolkit precisam funcionar no servidor e dentro do Docker antes da ativação. O complemento usa por padrão um limite de 2500 MiB de **RAM do container**, sem swap; isso não limita a memória de vídeo. Para ajustar, defina `AR_AUTO_KOKORO_GPU_MEM_LIMIT` no `.env` do projeto Compose.
+
+O complemento inicia também `arauto-gpu-metrics`, um processo separado que consulta `nvidia-smi` e fornece apenas as métricas da placa para o painel pela rede interna do Compose. Ele não publica porta no servidor nem recebe o socket do Docker. O bot continua funcionando se o monitor de GPU estiver indisponível; o painel mostrará “Sem dados”. As medições de tempo CPU e GPU ficam separadas no histórico do painel.
+
+Após atualizar o código, confirme que a fila e qualquer geração estejam vazias; a troca para GPU recria o Kokoro e o bot. Mensagens enviadas enquanto o bot estiver parado podem não ser processadas, conforme a configuração de entrega da Evolution. Com `AR_AUTO_TTS_PROVIDER=kokoro` configurado no Compose, use os comandos a partir da pasta do bot:
+
+```bash
+cd ~/dev/arauto-bot &&
+git pull --ff-only origin main &&
+sudo ./scripts/arauto-kokoro.sh gpu
+```
+
+O comando valida as configurações, verifica as imagens CPU e GPU e constrói a imagem do bot antes de pará-lo. Depois testa um MP3 sintético na GPU sem enviar mensagens, inicia o bot e verifica duas vezes sua rota local de saúde. Se a ativação ou o teste falhar, tenta restaurar automaticamente a CPU e informa o resultado. Se a restauração também falhar, confira os logs e tente novamente o comando de retorno à CPU; uma cópia local dos caminhos do Compose em `.arauto-state/` permite a recuperação mesmo se o container do bot tiver desaparecido. A cópia não inclui chaves ou conteúdo das mensagens.
+
+O monitor de GPU é iniciado por último e sua falha não impede o bot de iniciar. Depois de ativado, `scripts/arauto-compose.sh` preserva o complemento GPU e o painel nas próximas chamadas. Verifique `sudo ./scripts/arauto-compose.sh logs --tail=100 bot kokoro arauto-gpu-metrics` e, se o painel estiver habilitado, confirme nele as métricas. Uma amostra sintética e métricas disponíveis não garantem desempenho ou memória suficientes para todo texto futuro.
+
+Para voltar à CPU, espere a fila esvaziar e execute:
+
+```bash
+sudo ./scripts/arauto-kokoro.sh cpu
+```
+
+O retorno ignora o complemento GPU mesmo se ele estiver inválido, restaura primeiro os serviços CPU e depois tenta remover o monitor separado. Ele preserva os demais arquivos do Compose e não apaga as imagens, volumes, configurações da Evolution ou áudios. Durante o funcionamento normal, não há troca automática para CPU: falhas seguem as tentativas e o relatório já existentes.
 
 ### Testar e ativar no Compose existente
 
@@ -309,7 +335,7 @@ O painel opcional é somente para leitura e **não usa senha**. Mostra a etapa a
 
 Para Gemini e Kokoro, a barra mostra uma **estimativa**, não uma porcentagem real. A previsão usa os tempos de pelo menos duas execuções bem-sucedidas com tamanhos semelhantes; modelos, provedor, voz, ritmo e dispositivo CPU/GPU têm históricos separados. Sem dados suficientes, ou quando o tempo previsto é ultrapassado, a barra não informa uma porcentagem nem promete um prazo. Os últimos 100 eventos e medições numéricas ficam em `logs/painel-monitor.json`, preservados pelo volume de logs; o histórico do painel não grava mensagens. Os logs comuns do bot continuam seguindo sua configuração anterior.
 
-O uso de CPU é uma leitura geral do servidor. A GPU só mostra uso e memória se `nvidia-smi` estiver disponível e tiver acesso à placa **dentro do container do bot**; caso contrário o painel mostra “Sem dados”. O complemento Kokoro atual usa CPU. Não é necessário conceder acesso ao socket Docker para o painel.
+O uso de CPU é uma leitura geral do servidor. Na execução direta, a GPU mostra uso e memória se `nvidia-smi` estiver disponível ao processo do bot. Com o complemento opcional NVIDIA, um monitor isolado consulta a placa e repassa as métricas pela rede interna; se não estiver disponível, o painel mostra “Sem dados”. Não é necessário conceder acesso ao socket Docker para o painel.
 
 A página e o Kokoro funcionam na rede local após a instalação; o bot precisa de internet para o Gemini e das conexões habituais da Evolution para o WhatsApp. O painel local não precisa ser publicado na internet para mostrar o Gemini.
 
