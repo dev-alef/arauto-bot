@@ -93,9 +93,11 @@ async function gerarAudioComTentativas(textoNarrado, message, rota) {
   const erros = [];
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_AUDIO; tentativa++) {
     try {
-      monitor.etapa('audio', { tentativa, maxTentativas: MAX_TENTATIVAS_AUDIO, evento: `Gerando áudio: tentativa ${tentativa}/${MAX_TENTATIVAS_AUDIO}.` });
+      monitor.etapa('audio', { tentativa, maxTentativas: MAX_TENTATIVAS_AUDIO, tamanho: textoNarrado.length, evento: `Gerando áudio: tentativa ${tentativa}/${MAX_TENTATIVAS_AUDIO}.` });
       log(`🎙️ Gerando áudio (tentativa ${tentativa}/${MAX_TENTATIVAS_AUDIO})...`);
-      return await generateAudio(textoNarrado, message.messageId);
+      const audio = await generateAudio(textoNarrado, message.messageId);
+      monitor.concluirEtapa();
+      return audio;
     } catch (error) {
       erros.push(error);
       monitor.evento(`Falha na tentativa ${tentativa}/${MAX_TENTATIVAS_AUDIO}: ${motivoFalhaAudio(error)}.`, 'warn');
@@ -183,10 +185,11 @@ async function executarFluxo(message) {
     await checarVersaoNova();
 
     // ETAPA 1: Adaptar texto com IA (retorna versão escrita + versão narrada)
-    monitor.etapa('ia', { evento: 'Preparando o texto com o Gemini.' });
-    log('🤖 Adaptando texto com IA...');
     const textoParaAdaptar = rota.tipo === 'aula de IA' ? removerMarcadorAula(text) : text;
+    monitor.etapa('ia', { tamanho: textoParaAdaptar.length, evento: 'Preparando o texto com o Gemini.' });
+    log('🤖 Adaptando texto com IA...');
     const resultado = await adaptTextWithAI(textoParaAdaptar, rota.prompt);
+    monitor.concluirEtapa();
 
     const textoEscrito = limpar(resultado.texto);      // com "2 Reis 4:12"
     const textoNarrado = limpar(resultado.narracao);   // com "Segundo Reis, capítulo quatro..."

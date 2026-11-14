@@ -17,6 +17,8 @@
     .activity{margin:38px 0 28px}.activity h2{font-size:clamp(24px,3vw,32px);line-height:1.2;letter-spacing:-.03em;margin:0 0 9px}.activity p{color:var(--muted);margin:0;max-width:42ch}.stats{border-top:1px solid var(--line);padding-top:20px;display:flex;gap:42px;flex-wrap:wrap}.stat small{color:var(--muted);font-size:12px;display:block;margin-bottom:2px}.stat strong{font-size:20px;font-variant-numeric:tabular-nums}.small-card{min-height:142px}.small-card h2{font-size:18px;margin:18px 0 1px}.small-card p{font-size:13px;color:var(--muted);margin:0}.indicator{font-size:11px;color:var(--green);text-transform:none;letter-spacing:0}.indicator.warn{color:var(--gold)}
     .events{margin-top:16px}.events h2{font-size:18px;margin:0}.events .sub{margin:4px 0 20px;color:var(--muted);font-size:13px}.event-list{list-style:none;padding:0;margin:0}.event-list li{border-top:1px solid var(--line);padding:13px 0;display:grid;grid-template-columns:10px 1fr auto;gap:12px;align-items:baseline}.event-dot{width:7px;height:7px;border-radius:50%;background:var(--green)}.event-dot.warn{background:var(--gold)}.event-dot.error{background:var(--red)}time{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}.empty{color:var(--muted);padding:14px 0}
     footer{margin-top:20px;color:#8da096;font-size:12px}.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .progress-block{margin-top:22px}.progress-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;font-weight:600;margin-bottom:8px}.progress-head span:last-child{color:var(--muted);font-weight:400}.progress-track{height:9px;background:#31423d;border-radius:12px;overflow:hidden}.progress-fill{height:100%;background:var(--green);border-radius:12px;transition:width .4s}.progress-fill.unknown{width:28%!important;opacity:.7;animation:progress 2.2s ease-in-out infinite}.estimate-note{margin-top:8px!important;font-size:12px;color:var(--muted)}@keyframes progress{from{transform:translateX(-100%)}to{transform:translateX(360%)}}@media(prefers-reduced-motion:reduce){.progress-fill.unknown{animation:none}}
+    .extra-card{margin-top:16px}.extra-card h2{font-size:18px;margin:0}.extra-card .sub{color:var(--muted);font-size:13px;margin:4px 0 16px}.resource-list{display:flex;gap:50px;flex-wrap:wrap}.resource-list strong{display:block;font-size:19px;font-variant-numeric:tabular-nums}.resource-list small{color:var(--muted);font-size:12px}.text-preview{margin:0;max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text);font:inherit;line-height:1.65}.extra-card[hidden],.progress-block[hidden]{display:none}
     @media(max-width:700px){main{padding:22px 16px 40px}header{margin-bottom:34px}.layout{grid-template-columns:1fr}.hero{grid-row:auto;min-height:260px}.small-card{min-height:auto}.stats{gap:28px}.event-list li{grid-template-columns:10px 1fr}.event-list time{grid-column:2}}
   </style>
 </head>
@@ -32,7 +34,13 @@
   <div class="layout">
     <section class="card hero" aria-labelledby="activity-title">
       <div class="card-head"><span>Atividade atual</span><span class="pill" id="kind">Em espera</span></div>
-      <div class="activity"><h2 id="activity-title">Conectando ao bot…</h2><p id="activity-description">Buscando o estado mais recente.</p></div>
+      <div class="activity"><h2 id="activity-title">Conectando ao bot…</h2><p id="activity-description">Buscando o estado mais recente.</p>
+        <div class="progress-block" id="progress-block" hidden>
+          <div class="progress-head"><span id="progress-label">Processando</span><span id="progress-remaining">Sem estimativa ainda</span></div>
+          <div class="progress-track" id="progress-track" role="progressbar" aria-label="Progresso estimado"><div class="progress-fill unknown" id="progress-fill"></div></div>
+          <p class="estimate-note" id="progress-note">A estimativa depende dos tempos de processamentos anteriores.</p>
+        </div>
+      </div>
       <div class="stats">
         <div class="stat"><small>Tempo nesta etapa</small><strong id="elapsed">—</strong></div>
         <div class="stat"><small>Na fila</small><strong id="queue">—</strong></div>
@@ -48,9 +56,19 @@
       <h2 id="audio-title">—</h2><p id="audio-details">—</p>
     </section>
   </div>
+  <section class="card extra-card" aria-labelledby="resources-title">
+    <div class="card-head"><h2 id="resources-title">Recursos do servidor</h2></div>
+    <p class="sub">A CPU mostra o uso geral; a GPU depende do acesso do painel à placa.</p>
+    <div class="resource-list"><div><small>CPU</small><strong id="cpu-usage">—</strong></div><div><small>GPU</small><strong id="gpu-usage">—</strong><small id="gpu-memory"></small></div></div>
+  </section>
+  <section class="card extra-card" id="text-section" aria-labelledby="text-title" hidden>
+    <div class="card-head"><h2 id="text-title">Texto do Gemini</h2><span id="text-status">—</span></div>
+    <p class="sub" id="text-note">O texto em preparação pode mudar antes do envio.</p>
+    <pre class="text-preview" id="generated-text"></pre>
+  </section>
   <section class="card events" aria-labelledby="events-title">
     <div class="card-head"><h2 id="events-title">Atividade recente</h2><span id="updated">—</span></div>
-    <p class="sub">Atualizações desta sessão do bot, sem expor textos ou números.</p>
+    <p class="sub">Últimas atualizações registradas no servidor.</p>
     <ul id="events-list" class="event-list"><li class="empty">Nenhuma atividade registrada ainda.</li></ul>
   </section>
   <footer>O painel é somente para acompanhamento. A preparação com Gemini precisa de internet; o Kokoro funciona no servidor.</footer>
@@ -64,7 +82,7 @@
     intervalo: ['Aguardando o intervalo', 'O bot respeita a pausa entre envios.'],
     atualizacao: ['Verificando o serviço de voz', 'O bot está conferindo atualizações antes de continuar.'],
     ia: ['Preparando o texto', 'O Gemini está adaptando a mensagem para leitura e narração.'],
-    audio: ['Gerando o áudio', 'O serviço está trabalhando. Ele não informa uma porcentagem de conclusão.'],
+    audio: ['Gerando o áudio', 'O serviço de voz está trabalhando na narração.'],
     nova_tentativa: ['Aguardando nova tentativa', 'A última geração falhou. O bot tentará novamente.'],
     envio: ['Enviando mensagem', 'Texto e áudio estão sendo encaminhados pela Evolution API.'],
     concluido: ['Envio concluído', 'A Evolution API aceitou a mensagem.'],
@@ -80,6 +98,33 @@
     if (!data) return;
     const agora = Date.now() - offset;
     el('elapsed').textContent = data.etapa === 'aguardando' ? '—' : tempo(agora - data.etapaDesde);
+    const emGeracao = data.etapa === 'ia' || data.etapa === 'audio';
+    el('progress-block').hidden = !emGeracao;
+    if (emGeracao) {
+      const estimativa = data.progresso?.estimativaMs;
+      const decorrido = Math.max(0, agora - data.etapaDesde);
+      const vencida = Number.isFinite(estimativa) && estimativa > 0 && decorrido >= estimativa;
+      const disponivel = Number.isFinite(estimativa) && estimativa > 0 && !vencida;
+      const faixa = el('progress-track'), preenchimento = el('progress-fill');
+      preenchimento.classList.toggle('unknown', !disponivel);
+      if (disponivel) {
+        const percentual = Math.min(95, Math.floor(100 * decorrido / estimativa));
+        preenchimento.style.width = percentual + '%';
+        faixa.setAttribute('aria-valuenow', String(percentual));
+        faixa.setAttribute('aria-valuemin', '0'); faixa.setAttribute('aria-valuemax', '100');
+        faixa.setAttribute('aria-valuetext', 'Progresso estimado: ' + percentual + '%');
+        el('progress-label').textContent = 'Progresso estimado: ' + percentual + '%';
+        el('progress-remaining').textContent = 'Faltam aproximadamente ' + tempo(estimativa - decorrido);
+        el('progress-note').textContent = 'Estimativa baseada em processamentos anteriores; o tempo pode variar.';
+      } else {
+        preenchimento.style.width = ''; faixa.removeAttribute('aria-valuenow');
+        faixa.removeAttribute('aria-valuemin'); faixa.removeAttribute('aria-valuemax');
+        faixa.setAttribute('aria-valuetext', 'Progresso sem estimativa');
+        el('progress-label').textContent = 'Processamento em andamento';
+        el('progress-remaining').textContent = vencida ? 'Demorando mais do que o previsto' : 'Sem estimativa ainda';
+        el('progress-note').textContent = vencida ? 'A previsão foi ultrapassada; o processo continua em andamento.' : 'A estimativa aparecerá após processamentos semelhantes.';
+      }
+    }
     if (data.etapa === 'nova_tentativa' && data.proximaTentativaEm) {
       const restante = Math.max(0, data.proximaTentativaEm - agora);
       el('activity-description').textContent = restante ? 'Próxima tentativa em aproximadamente ' + tempo(restante) + '.' : 'A próxima tentativa deve começar em instantes.';
@@ -93,13 +138,27 @@
     el('queue').textContent = String(status.pendentes);
     el('attempt-wrap').hidden = !status.tentativa;
     el('attempt').textContent = status.tentativa ? status.tentativa + ' / ' + status.maxTentativas : '—';
-    el('ai-status').textContent = status.etapa === 'ia' ? 'Em execução' : 'Configurado';
+    el('ai-status').textContent = status.etapa === 'ia' ? 'Em execução' : status.textoCompleto ? 'Preparação concluída' : 'Configurado';
     el('model').textContent = 'Modelo: ' + status.modelo;
     const edge = ['edge', 'msedge', 'msedge-tts'].includes(status.provedor);
     el('audio-title').textContent = !status.audioAtivo ? 'Áudio desativado' : status.provedor === 'kokoro' ? 'Kokoro' : edge ? 'Microsoft Edge' : 'Serviço não reconhecido';
     el('audio-health').textContent = !status.audioAtivo ? 'Desativado' : edge ? 'Selecionado' : status.provedor !== 'kokoro' ? 'Verifique a configuração' : status.kokoro === 'respondendo' ? 'Respondendo' : 'Sem resposta';
     el('audio-health').classList.toggle('warn', status.audioAtivo && status.provedor === 'kokoro' && status.kokoro !== 'respondendo');
     el('audio-details').textContent = !status.audioAtivo ? 'Apenas o texto será enviado.' : status.provedor === 'kokoro' ? 'Voz ' + status.voz + ' · velocidade ' + status.velocidade : edge ? 'Voz do Microsoft Edge selecionada.' : 'Confira o provedor de áudio nos logs do bot.';
+    el('cpu-usage').textContent = Number.isFinite(status.recursos?.cpuPercentual) ? status.recursos.cpuPercentual + '%' : 'Aguardando leitura';
+    const gpu = status.recursos?.gpu;
+    el('gpu-usage').textContent = gpu && Number.isFinite(gpu.usoPercentual) ? gpu.usoPercentual + '%' : 'Sem dados';
+    el('gpu-memory').textContent = gpu ? 'Memória: ' + gpu.memoriaUsadaMiB + ' / ' + gpu.memoriaTotalMiB + ' MiB' : 'Métricas indisponíveis no painel.';
+    const texto = typeof status.textoGerado === 'string' ? status.textoGerado : '';
+    el('text-section').hidden = !texto;
+    el('text-status').textContent = status.etapa === 'ia' ? 'Em preparação' : status.textoCompleto ? 'Último texto preparado' : 'Prévia interrompida';
+    el('text-note').textContent = status.textoTruncado ? 'Prévia limitada a 100 mil caracteres; a mensagem completa segue o processamento.' : 'O texto em preparação pode mudar antes do envio.';
+    const visualizacao = el('generated-text');
+    if (visualizacao.textContent !== texto) {
+      const acompanhar = visualizacao.scrollTop + visualizacao.clientHeight >= visualizacao.scrollHeight - 10;
+      visualizacao.textContent = texto;
+      if (acompanhar) visualizacao.scrollTop = visualizacao.scrollHeight;
+    }
     const list = el('events-list'); list.replaceChildren();
     if (!status.eventos.length) { const li = document.createElement('li'); li.className='empty'; li.textContent='Nenhuma atividade registrada ainda.'; list.append(li); }
     for (const item of status.eventos) {

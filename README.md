@@ -305,14 +305,17 @@ Nenhuma dependência nova é necessária para esta mudança. Se o próprio bot e
 
 ## 📊 Painel local de acompanhamento
 
-O painel opcional é somente para leitura. Mostra a etapa atual, a quantidade de mensagens na fila, o modelo Gemini configurado, a voz e velocidade, se o Kokoro responde, as tentativas de áudio e a contagem até a próxima tentativa. O histórico recente permanece na memória e é apagado ao reiniciar o bot. Não mostra texto, telefones ou chaves.
+O painel opcional é somente para leitura e **não usa senha**. Mostra a etapa atual, a fila, as tentativas, a saúde do Kokoro e o texto adaptado pelo Gemini enquanto é recebido. A prévia do texto permanece apenas na memória do bot e é limitada a 100 mil caracteres; isso não limita o texto processado ou enviado. O painel não exibe chaves, telefones ou o texto original.
 
-A porcentagem exata de geração não está disponível no modo de áudio completo; o painel mostra o tempo decorrido, sem estimar um percentual. A página e o Kokoro funcionam na rede local após a instalação; o Gemini e a Evolution continuam dependendo de suas conexões habituais.
+Para Gemini e Kokoro, a barra mostra uma **estimativa**, não uma porcentagem real. A previsão usa os tempos de pelo menos duas execuções bem-sucedidas com tamanhos semelhantes; modelos, provedor, voz, ritmo e dispositivo CPU/GPU têm históricos separados. Sem dados suficientes, ou quando o tempo previsto é ultrapassado, a barra não informa uma porcentagem nem promete um prazo. Os últimos 100 eventos e medições numéricas ficam em `logs/painel-monitor.json`, preservados pelo volume de logs; o histórico do painel não grava mensagens. Os logs comuns do bot continuam seguindo sua configuração anterior.
+
+O uso de CPU é uma leitura geral do servidor. A GPU só mostra uso e memória se `nvidia-smi` estiver disponível e tiver acesso à placa **dentro do container do bot**; caso contrário o painel mostra “Sem dados”. O complemento Kokoro atual usa CPU. Não é necessário conceder acesso ao socket Docker para o painel.
+
+A página e o Kokoro funcionam na rede local após a instalação; o bot precisa de internet para o Gemini e das conexões habituais da Evolution para o WhatsApp. O painel local não precisa ser publicado na internet para mostrar o Gemini.
 
 No servidor, após baixar esta versão, adicione no `.env` do projeto Compose da Evolution, preservando as demais configurações:
 
 ```env
-AR_AUTO_DASHBOARD_PASSWORD=escolha_uma_senha_forte
 # Padrão: 127.0.0.1, acessível apenas no servidor.
 # Para acesso por outro computador da rede, substitua pelo IP local do servidor.
 AR_AUTO_DASHBOARD_BIND=127.0.0.1
@@ -326,9 +329,9 @@ cd ~/dev/arauto-bot
 sudo ./scripts/arauto-compose.sh -f "$HOME/dev/arauto-bot/docker-compose.dashboard.yml" up -d --build --no-deps bot
 ```
 
-Abra `http://IP_DO_SERVIDOR:3001/` no navegador e entre com o usuário **arauto** e a senha configurada. O complemento passa a constar na configuração do container: comandos posteriores com `scripts/arauto-compose.sh` o preservam. Para acesso exclusivo no próprio servidor use `http://127.0.0.1:3001/`.
+Abra `http://IP_DO_SERVIDOR:3001/` no navegador. O complemento habilita o painel e passa a constar na configuração do container: comandos posteriores com `scripts/arauto-compose.sh` o preservam. Para acesso exclusivo no próprio servidor use `http://127.0.0.1:3001/`. Em execução direta, defina `AR_AUTO_DASHBOARD_ENABLED=true` para habilitar o painel; ele escuta apenas em `127.0.0.1` por padrão. Para permitir acesso direto pela rede local, configure explicitamente `AR_AUTO_DASHBOARD_INTERNAL_BIND` com o IP desejado.
 
-O painel usa HTTP e autenticação por senha, sem criptografia de transporte. Use-o somente em uma rede local confiável e não publique a porta na internet. Se o IP do servidor ou a senha mudar, atualize o `.env` e recrie o bot após a fila esvaziar.
+O painel usa HTTP **sem autenticação**, e o texto gerado fica visível a qualquer pessoa que consiga acessá-lo. Use-o somente em uma rede local confiável e não publique a porta na internet; para acesso remoto, use uma conexão privada, como VPN ou túnel SSH. A antiga variável `AR_AUTO_DASHBOARD_PASSWORD`, se ainda existir no `.env`, não é utilizada. Se o IP do servidor mudar, atualize o `.env` e recrie o bot após a fila esvaziar.
 
 ## ⏱️ Fila e relatório de falhas de áudio
 

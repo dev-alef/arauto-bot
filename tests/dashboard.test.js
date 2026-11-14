@@ -4,9 +4,17 @@ const http = require('node:http');
 const { once } = require('node:events');
 const { setImmediate: proximoTurno } = require('node:timers/promises');
 
-test('painel exige senha e devolve somente estado resumido', async t => {
+test('painel é acessível sem senha e não expõe credenciais', async t => {
+  const nomes = ['GEMINI_API_KEY', 'EVOLUTION_API_KEY', 'AR_AUTO_DASHBOARD_PASSWORD'];
+  const anteriores = Object.fromEntries(nomes.map(nome => [nome, process.env[nome]]));
+  for (const nome of nomes) process.env[nome] = `segredo-${nome}`;
+  t.after(() => {
+    for (const [nome, valor] of Object.entries(anteriores)) {
+      if (valor === undefined) delete process.env[nome]; else process.env[nome] = valor;
+    }
+  });
   const { criarPainel } = require('../src/dashboard');
-  const app = criarPainel('senha-de-teste', { consultarSaude: async () => 'respondendo' });
+  const app = criarPainel({ consultarSaude: async () => 'respondendo', consultarRecursos: async () => ({ cpuPercentual: 42, gpu: null }) });
   const servidor = app.listen(0, '127.0.0.1');
   await once(servidor, 'listening');
   t.after(async () => {
@@ -14,20 +22,17 @@ test('painel exige senha e devolve somente estado resumido', async t => {
     await new Promise(resolve => servidor.close(resolve));
   });
   const url = `http://127.0.0.1:${servidor.address().port}`;
-  const auth = (senha) => ({ Authorization: 'Basic ' + Buffer.from('arauto:' + senha).toString('base64') });
-  for (const rota of ['/', '/api/status']) {
-    assert.equal((await fetch(url + rota)).status, 401);
-    assert.equal((await fetch(url + rota, { headers: auth('incorreta') })).status, 401);
-  }
-  const pagina = await fetch(url + '/', { headers: auth('senha-de-teste') });
+  const pagina = await fetch(url + '/');
   assert.equal(pagina.status, 200);
   assert.match(await pagina.text(), /O que está acontecendo/);
   assert.equal(pagina.headers.get('cache-control'), 'no-store');
-  const resposta = await fetch(url + '/api/status', { headers: auth('senha-de-teste') });
+  const resposta = await fetch(url + '/api/status');
   const estado = await resposta.json();
   assert.equal(estado.kokoro, 'respondendo');
+  assert.deepEqual(estado.recursos, { cpuPercentual: 42, gpu: null });
   assert.ok(Array.isArray(estado.eventos));
-  assert.doesNotMatch(JSON.stringify(estado), /senha-de-teste/);
+  assert.equal(resposta.headers.get('www-authenticate'), null);
+  assert.doesNotMatch(JSON.stringify(estado), /segredo-/);
 });
 
 test('painel verifica a disponibilidade do Kokoro sem expor seu endereço', async t => {
@@ -42,7 +47,7 @@ test('painel verifica a disponibilidade do Kokoro sem expor seu endereço', asyn
   process.env.TTS_PROVIDER = 'kokoro';
   process.env.KOKORO_URL = `http://127.0.0.1:${kokoro.address().port}`;
   const { criarPainel } = require('../src/dashboard');
-  const servidor = criarPainel('senha').listen(0, '127.0.0.1');
+  const servidor = criarPainel({ consultarRecursos: async () => ({ cpuPercentual: null, gpu: null }) }).listen(0, '127.0.0.1');
   await once(servidor, 'listening');
   t.after(async () => {
     servidor.closeAllConnections();
@@ -53,14 +58,40 @@ test('painel verifica a disponibilidade do Kokoro sem expor seu endereço', asyn
     }
   });
   const url = `http://127.0.0.1:${servidor.address().port}/api/status`;
-  const headers = { Authorization: 'Basic ' + Buffer.from('arauto:senha').toString('base64') };
-  let estado = await (await fetch(url, { headers })).json();
+  let estado = await (await fetch(url)).json();
   assert.equal(estado.kokoro, 'respondendo');
   assert.doesNotMatch(JSON.stringify(estado), /127\.0\.0\.1/);
   kokoro.closeAllConnections();
   await new Promise(resolve => kokoro.close(resolve));
-  estado = await (await fetch(url, { headers })).json();
+  estado = await (await fetch(url)).json();
   assert.equal(estado.kokoro, 'sem_resposta');
+});
+
+test('execução direta sem senha fica limitada ao localhost por padrão', async t => {
+  const temporario = http.createServer().listen(0, '127.0.0.1');
+  await once(temporario, 'listening');
+  const porta = temporario.address().port;
+  await new Promise(resolve => temporario.close(resolve));
+  const variaveis = ['AR_AUTO_DASHBOARD_ENABLED', 'AR_AUTO_DASHBOARD_INTERNAL_PORT', 'AR_AUTO_DASHBOARD_INTERNAL_BIND'];
+  const anteriores = Object.fromEntries(variaveis.map(k => [k, process.env[k]]));
+  process.env.AR_AUTO_DASHBOARD_ENABLED = 'true';
+  process.env.AR_AUTO_DASHBOARD_INTERNAL_PORT = String(porta);
+  delete process.env.AR_AUTO_DASHBOARD_INTERNAL_BIND;
+  const monitor = require('../src/monitor');
+  const persistenciaOriginal = monitor.habilitarPersistencia;
+  monitor.habilitarPersistencia = () => {};
+  const { iniciarPainel } = require('../src/dashboard');
+  const servidor = iniciarPainel();
+  await once(servidor, 'listening');
+  t.after(async () => {
+    servidor.closeAllConnections();
+    await new Promise(resolve => servidor.close(resolve));
+    monitor.habilitarPersistencia = persistenciaOriginal;
+    for (const [nome, valor] of Object.entries(anteriores)) {
+      if (valor === undefined) delete process.env[nome]; else process.env[nome] = valor;
+    }
+  });
+  assert.equal(servidor.address().address, '127.0.0.1');
 });
 
 test('painel acompanha fila, IA e novas tentativas sem revelar conteúdo ou telefone', async t => {
