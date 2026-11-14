@@ -10,6 +10,7 @@ const { log } = require('./logger');
 const { checarVersaoNova } = require('./version-check');
 const { selecionarRota, normalizarTextoRecebido, removerMarcadorAula } = require('./routing');
 const tempo = require('./tempo');
+const monitor = require('./monitor');
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CONFIG = {
@@ -34,9 +35,24 @@ let proximoEnvioEm = 0;
 const MINUTO = 60 * 1000;
 const MAX_TENTATIVAS_AUDIO = 4; // tentativa inicial + três novas tentativas
 
+// Expõe somente categorias conhecidas: erros brutos podem conter dados sensíveis.
+function motivoFalhaAudio(error) {
+  const mensagem = String(error?.message || '');
+  const http = /^Kokoro retornou HTTP (\d{3})/.exec(mensagem);
+  if (http) return `Kokoro respondeu HTTP ${http[1]}`;
+  if (/tempo limite/i.test(mensagem)) return 'tempo de espera esgotado';
+  if (/KOKORO_SPEED inválida|Configuração inválida/.test(mensagem)) return 'configuração de voz inválida';
+  if (/não retornou um áudio MP3 válido/i.test(mensagem)) return 'resposta de áudio inválida';
+  if (/encerrada antes do fim|socket hang up/i.test(mensagem) || error?.code === 'ECONNRESET') return 'conexão interrompida';
+  if (error?.code === 'ECONNREFUSED') return 'serviço de áudio recusou a conexão';
+  if (error?.code === 'ENOTFOUND' || error?.code === 'EAI_AGAIN') return 'serviço de áudio não encontrado';
+  return 'consulte os logs para detalhes';
+}
+
 async function aguardarIntervalo() {
   let restante = proximoEnvioEm - tempo.agora();
   if (restante > 0) {
+    monitor.etapa('intervalo', { evento: 'Aguardando o intervalo entre mensagens.' });
     log(`⏳ Aguardando ${Math.ceil(restante / 1000)}s antes da próxima reflexão.`);
     do {
       await tempo.esperar(restante);
@@ -77,18 +93,26 @@ async function gerarAudioComTentativas(textoNarrado, message, rota) {
   const erros = [];
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_AUDIO; tentativa++) {
     try {
+      monitor.etapa('audio', { tentativa, maxTentativas: MAX_TENTATIVAS_AUDIO, evento: `Gerando áudio: tentativa ${tentativa}/${MAX_TENTATIVAS_AUDIO}.` });
       log(`🎙️ Gerando áudio (tentativa ${tentativa}/${MAX_TENTATIVAS_AUDIO})...`);
       return await generateAudio(textoNarrado, message.messageId);
     } catch (error) {
       erros.push(error);
+      monitor.evento(`Falha na tentativa ${tentativa}/${MAX_TENTATIVAS_AUDIO}: ${motivoFalhaAudio(error)}.`, 'warn');
       log(`⚠️ Falha na tentativa ${tentativa}/${MAX_TENTATIVAS_AUDIO}: ${error.message}`, 'warn');
       if (tentativa < MAX_TENTATIVAS_AUDIO) {
         const espera = tempo.sortear(3 * MINUTO, 5 * MINUTO);
+        monitor.etapa('nova_tentativa', {
+          tentativa, maxTentativas: MAX_TENTATIVAS_AUDIO,
+          proximaTentativaEm: Date.now() + espera,
+          evento: 'Aguardando para tentar gerar o áudio novamente.', nivel: 'warn',
+        });
         log(`⏳ Nova tentativa de áudio em ${Math.ceil(espera / 1000)}s.`);
         await tempo.esperar(espera);
       }
     }
   }
+  monitor.etapa('falha', { evento: 'Todas as tentativas de áudio falharam.', nivel: 'error' });
   await reportarFalhaAudio(message, rota, erros);
   return null;
 }
@@ -99,10 +123,14 @@ async function processarFila() {
 
   while (fila.length > 0) {
     const message = fila.shift(); // pega a mais antiga
+    monitor.atualizarFila(fila.length);
     try {
       await executarFluxo(message);
     } catch (error) {
+      monitor.evento('Falha ao processar uma mensagem. Consulte os logs.', 'error');
       log(`❌ Erro ao processar mensagem da fila: ${error.message}`, 'error');
+    } finally {
+      monitor.finalizar();
     }
   }
 
@@ -114,6 +142,7 @@ async function processarFila() {
  */
 async function processMessage(message) {
   fila.push(message);
+  monitor.atualizarFila(fila.length);
   processarFila(); // sem await de propósito — o webhook responde rápido
 }
 
@@ -140,6 +169,7 @@ async function executarFluxo(message) {
     return;
   }
 
+  monitor.iniciar(rota.tipo);
   log(`📩 Mensagem recebida de ${from}: "${text.substring(0, 60)}..."`);
   log(`🎯 Rota: ${rota.tipo} → ${rota.destino}`);
   if (fila.length > 0) log(`📋 Fila: ${fila.length} mensagem(ns) aguardando`);
@@ -149,9 +179,11 @@ async function executarFluxo(message) {
     await aguardarIntervalo();
 
     // Consulta a cada reflexão válida e aguarda a atualização antes do áudio/envio.
+    monitor.etapa('atualizacao', { evento: 'Verificando o serviço de voz.' });
     await checarVersaoNova();
 
     // ETAPA 1: Adaptar texto com IA (retorna versão escrita + versão narrada)
+    monitor.etapa('ia', { evento: 'Preparando o texto com o Gemini.' });
     log('🤖 Adaptando texto com IA...');
     const textoParaAdaptar = rota.tipo === 'aula de IA' ? removerMarcadorAula(text) : text;
     const resultado = await adaptTextWithAI(textoParaAdaptar, rota.prompt);
@@ -171,6 +203,7 @@ async function executarFluxo(message) {
     }
 
     // ETAPA 3: Enviar ao grupo ou contato selecionado
+    monitor.etapa('envio', { evento: 'Enviando mensagem pela Evolution API.' });
     log(`📤 Enviando ${rota.tipo}...`);
     try {
       if (audioPath) {
@@ -182,9 +215,11 @@ async function executarFluxo(message) {
       // Mesmo se o envio falhar, a Evolution pode ter recebido parte da mensagem.
       proximoEnvioEm = tempo.agora() + tempo.sortear(MINUTO, 3 * MINUTO);
     }
+    monitor.etapa('concluido', { evento: 'Envio aceito pela Evolution API.', nivel: 'success' });
     log(`✅ ${rota.tipo} enviada com sucesso!`);
 
   } catch (error) {
+    monitor.etapa('falha', { evento: 'Falha ao processar a mensagem. Consulte os logs.', nivel: 'error' });
     log(`❌ Erro ao processar mensagem: ${error.message}`, 'error');
   }
 }

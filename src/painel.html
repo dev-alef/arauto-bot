@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Arauto · Painel</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0e1515;--panel:#182221;--line:#31423d;--text:#f0f5ee;--muted:#a1b4aa;--green:#a6dcab;--gold:#ebcb8a;--red:#f3a6a0}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(ellipse at 25% -20%,#273e32 0,transparent 45%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+    main{max-width:1080px;margin:auto;padding:32px 24px 56px} header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:48px}
+    .brand{display:flex;align-items:center;gap:12px;font-weight:700;letter-spacing:.04em}.mark{display:grid;place-items:center;width:40px;height:40px;border-radius:13px;background:#a6dcab;color:#153023;font-size:20px}
+    .brand small{display:block;font-size:10px;letter-spacing:.17em;color:var(--muted);font-weight:600}.connection{font-size:12px;color:var(--green);display:flex;align-items:center;gap:8px}.dot{width:8px;height:8px;background:currentColor;border-radius:50%}.connection.off{color:var(--red)}
+    .eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:11px;color:var(--green);font-weight:700;margin:0 0 8px}h1{font-size:clamp(30px,4vw,45px);line-height:1.15;letter-spacing:-.04em;margin:0 0 10px}.intro{color:var(--muted);margin:0 0 30px}
+    .layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(260px,1fr);gap:16px}.card{background:rgba(24,34,33,.94);border:1px solid var(--line);border-radius:18px;padding:22px}.hero{grid-row:span 2;min-height:300px;display:flex;flex-direction:column;justify-content:space-between}
+    .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.12em;font-weight:700}.pill{padding:5px 10px;border:1px solid #42624d;color:var(--green);background:#21382b;border-radius:99px;letter-spacing:.03em;text-transform:none;font-size:12px}
+    .activity{margin:38px 0 28px}.activity h2{font-size:clamp(24px,3vw,32px);line-height:1.2;letter-spacing:-.03em;margin:0 0 9px}.activity p{color:var(--muted);margin:0;max-width:42ch}.stats{border-top:1px solid var(--line);padding-top:20px;display:flex;gap:42px;flex-wrap:wrap}.stat small{color:var(--muted);font-size:12px;display:block;margin-bottom:2px}.stat strong{font-size:20px;font-variant-numeric:tabular-nums}.small-card{min-height:142px}.small-card h2{font-size:18px;margin:18px 0 1px}.small-card p{font-size:13px;color:var(--muted);margin:0}.indicator{font-size:11px;color:var(--green);text-transform:none;letter-spacing:0}.indicator.warn{color:var(--gold)}
+    .events{margin-top:16px}.events h2{font-size:18px;margin:0}.events .sub{margin:4px 0 20px;color:var(--muted);font-size:13px}.event-list{list-style:none;padding:0;margin:0}.event-list li{border-top:1px solid var(--line);padding:13px 0;display:grid;grid-template-columns:10px 1fr auto;gap:12px;align-items:baseline}.event-dot{width:7px;height:7px;border-radius:50%;background:var(--green)}.event-dot.warn{background:var(--gold)}.event-dot.error{background:var(--red)}time{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}.empty{color:var(--muted);padding:14px 0}
+    footer{margin-top:20px;color:#8da096;font-size:12px}.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    @media(max-width:700px){main{padding:22px 16px 40px}header{margin-bottom:34px}.layout{grid-template-columns:1fr}.hero{grid-row:auto;min-height:260px}.small-card{min-height:auto}.stats{gap:28px}.event-list li{grid-template-columns:10px 1fr}.event-list time{grid-column:2}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand"><span class="mark" aria-hidden="true">✦</span><span>ARAUTO<small>PAINEL DO BOT</small></span></div>
+    <span class="connection" id="connection"><span class="dot"></span><span id="connection-label">Conectando…</span></span>
+  </header>
+  <p class="eyebrow">Acompanhamento local</p>
+  <h1>O que está acontecendo</h1>
+  <p class="intro">Acompanhe o caminho de cada mensagem, da preparação até o envio.</p>
+  <div class="layout">
+    <section class="card hero" aria-labelledby="activity-title">
+      <div class="card-head"><span>Atividade atual</span><span class="pill" id="kind">Em espera</span></div>
+      <div class="activity"><h2 id="activity-title">Conectando ao bot…</h2><p id="activity-description">Buscando o estado mais recente.</p></div>
+      <div class="stats">
+        <div class="stat"><small>Tempo nesta etapa</small><strong id="elapsed">—</strong></div>
+        <div class="stat"><small>Na fila</small><strong id="queue">—</strong></div>
+        <div class="stat" id="attempt-wrap" hidden><small>Tentativa de áudio</small><strong id="attempt">—</strong></div>
+      </div>
+    </section>
+    <section class="card small-card" aria-labelledby="ai-title">
+      <div class="card-head"><span>Preparação do texto</span><span class="indicator" id="ai-status">—</span></div>
+      <h2 id="ai-title">Google Gemini</h2><p id="model">Modelo: —</p>
+    </section>
+    <section class="card small-card" aria-labelledby="audio-title">
+      <div class="card-head"><span>Geração de áudio</span><span class="indicator" id="audio-health">—</span></div>
+      <h2 id="audio-title">—</h2><p id="audio-details">—</p>
+    </section>
+  </div>
+  <section class="card events" aria-labelledby="events-title">
+    <div class="card-head"><h2 id="events-title">Atividade recente</h2><span id="updated">—</span></div>
+    <p class="sub">Atualizações desta sessão do bot, sem expor textos ou números.</p>
+    <ul id="events-list" class="event-list"><li class="empty">Nenhuma atividade registrada ainda.</li></ul>
+  </section>
+  <footer>O painel é somente para acompanhamento. A preparação com Gemini precisa de internet; o Kokoro funciona no servidor.</footer>
+</main>
+<script>
+(() => {
+  const el = id => document.getElementById(id);
+  const labels = {
+    aguardando: ['Aguardando mensagens', 'O bot está pronto para receber uma reflexão ou aula.'],
+    preparando: ['Preparando mensagem', 'A mensagem está sendo organizada para processamento.'],
+    intervalo: ['Aguardando o intervalo', 'O bot respeita a pausa entre envios.'],
+    atualizacao: ['Verificando o serviço de voz', 'O bot está conferindo atualizações antes de continuar.'],
+    ia: ['Preparando o texto', 'O Gemini está adaptando a mensagem para leitura e narração.'],
+    audio: ['Gerando o áudio', 'O serviço está trabalhando. Ele não informa uma porcentagem de conclusão.'],
+    nova_tentativa: ['Aguardando nova tentativa', 'A última geração falhou. O bot tentará novamente.'],
+    envio: ['Enviando mensagem', 'Texto e áudio estão sendo encaminhados pela Evolution API.'],
+    concluido: ['Envio concluído', 'A Evolution API aceitou a mensagem.'],
+    falha: ['Não foi possível concluir', 'Confira a atividade recente e os logs do bot.']
+  };
+  let data = null, offset = 0, online = false;
+  function tempo(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(total / 3600);
+    const m = Math.floor(total % 3600 / 60), s = total % 60;
+    return (h ? String(h).padStart(2,'0') + ':' : '') + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  }
+  function atualizarRelogio() {
+    if (!data) return;
+    const agora = Date.now() - offset;
+    el('elapsed').textContent = data.etapa === 'aguardando' ? '—' : tempo(agora - data.etapaDesde);
+    if (data.etapa === 'nova_tentativa' && data.proximaTentativaEm) {
+      const restante = Math.max(0, data.proximaTentativaEm - agora);
+      el('activity-description').textContent = restante ? 'Próxima tentativa em aproximadamente ' + tempo(restante) + '.' : 'A próxima tentativa deve começar em instantes.';
+    }
+  }
+  function render(status) {
+    data = status; offset = Date.now() - status.agora;
+    const info = labels[status.etapa] || ['Processando', 'Acompanhando a atividade do bot.'];
+    el('activity-title').textContent = info[0]; el('activity-description').textContent = info[1];
+    el('kind').textContent = status.tipo || 'Em espera';
+    el('queue').textContent = String(status.pendentes);
+    el('attempt-wrap').hidden = !status.tentativa;
+    el('attempt').textContent = status.tentativa ? status.tentativa + ' / ' + status.maxTentativas : '—';
+    el('ai-status').textContent = status.etapa === 'ia' ? 'Em execução' : 'Configurado';
+    el('model').textContent = 'Modelo: ' + status.modelo;
+    const edge = ['edge', 'msedge', 'msedge-tts'].includes(status.provedor);
+    el('audio-title').textContent = !status.audioAtivo ? 'Áudio desativado' : status.provedor === 'kokoro' ? 'Kokoro' : edge ? 'Microsoft Edge' : 'Serviço não reconhecido';
+    el('audio-health').textContent = !status.audioAtivo ? 'Desativado' : edge ? 'Selecionado' : status.provedor !== 'kokoro' ? 'Verifique a configuração' : status.kokoro === 'respondendo' ? 'Respondendo' : 'Sem resposta';
+    el('audio-health').classList.toggle('warn', status.audioAtivo && status.provedor === 'kokoro' && status.kokoro !== 'respondendo');
+    el('audio-details').textContent = !status.audioAtivo ? 'Apenas o texto será enviado.' : status.provedor === 'kokoro' ? 'Voz ' + status.voz + ' · velocidade ' + status.velocidade : edge ? 'Voz do Microsoft Edge selecionada.' : 'Confira o provedor de áudio nos logs do bot.';
+    const list = el('events-list'); list.replaceChildren();
+    if (!status.eventos.length) { const li = document.createElement('li'); li.className='empty'; li.textContent='Nenhuma atividade registrada ainda.'; list.append(li); }
+    for (const item of status.eventos) {
+      const li=document.createElement('li'), dot=document.createElement('span'), text=document.createElement('span'), time=document.createElement('time');
+      dot.className='event-dot ' + (item.nivel === 'warn' || item.nivel === 'error' ? item.nivel : '');
+      text.textContent=item.mensagem; time.dateTime=new Date(item.quando).toISOString();
+      time.textContent=new Date(item.quando).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      li.append(dot,text,time); list.append(li);
+    }
+    el('updated').textContent='Atualizado agora'; atualizarRelogio();
+  }
+  async function consultar() {
+    try {
+      const resposta = await fetch('/api/status', {cache:'no-store', signal:AbortSignal.timeout(5000)});
+      if (!resposta.ok) throw new Error('status');
+      render(await resposta.json()); online = true;
+    } catch {
+      online = false;
+      el('updated').textContent = 'Sem atualização';
+    } finally {
+      el('connection').classList.toggle('off', !online);
+      el('connection-label').textContent = online ? 'Conectado' : 'Sem conexão com o painel';
+      setTimeout(consultar, 3000);
+    }
+  }
+  setInterval(atualizarRelogio,1000); consultar();
+})();
+</script>
+</body>
+</html>

@@ -303,6 +303,33 @@ Esta alteração não exige migração de banco nem recriação de PostgreSQL, R
 
 Nenhuma dependência nova é necessária para esta mudança. Se o próprio bot estiver dentro de um container, reconstrua/recrie somente o serviço do bot com o código novo e as variáveis carregadas pelo container. Editar um `.env` no host só funciona se o serviço realmente o repassar ou montar. Preserve as pastas persistentes do bot, especialmente `.tts-runtime/`. A Evolution API precisa permanecer conectada à conta do WhatsApp e acessível pelo bot; a mudança de sistema operacional não altera as rotas de envio usadas pelo código.
 
+## 📊 Painel local de acompanhamento
+
+O painel opcional é somente para leitura. Mostra a etapa atual, a quantidade de mensagens na fila, o modelo Gemini configurado, a voz e velocidade, se o Kokoro responde, as tentativas de áudio e a contagem até a próxima tentativa. O histórico recente permanece na memória e é apagado ao reiniciar o bot. Não mostra texto, telefones ou chaves.
+
+A porcentagem exata de geração não está disponível no modo de áudio completo; o painel mostra o tempo decorrido, sem estimar um percentual. A página e o Kokoro funcionam na rede local após a instalação; o Gemini e a Evolution continuam dependendo de suas conexões habituais.
+
+No servidor, após baixar esta versão, adicione no `.env` do projeto Compose da Evolution, preservando as demais configurações:
+
+```env
+AR_AUTO_DASHBOARD_PASSWORD=escolha_uma_senha_forte
+# Padrão: 127.0.0.1, acessível apenas no servidor.
+# Para acesso por outro computador da rede, substitua pelo IP local do servidor.
+AR_AUTO_DASHBOARD_BIND=127.0.0.1
+AR_AUTO_DASHBOARD_PORT=3001
+```
+
+Use `hostname -I` no servidor para identificar o IP local, por exemplo `192.168.1.20`, e coloque esse IP em `AR_AUTO_DASHBOARD_BIND` para permitir o acesso por outro computador na mesma rede. Após a fila esvaziar, habilite o complemento e reconstrua o bot:
+
+```bash
+cd ~/dev/arauto-bot
+sudo ./scripts/arauto-compose.sh -f "$HOME/dev/arauto-bot/docker-compose.dashboard.yml" up -d --build --no-deps bot
+```
+
+Abra `http://IP_DO_SERVIDOR:3001/` no navegador e entre com o usuário **arauto** e a senha configurada. O complemento passa a constar na configuração do container: comandos posteriores com `scripts/arauto-compose.sh` o preservam. Para acesso exclusivo no próprio servidor use `http://127.0.0.1:3001/`.
+
+O painel usa HTTP e autenticação por senha, sem criptografia de transporte. Use-o somente em uma rede local confiável e não publique a porta na internet. Se o IP do servidor ou a senha mudar, atualize o `.env` e recrie o bot após a fila esvaziar.
+
 ## ⏱️ Fila e relatório de falhas de áudio
 
 Depois de cada tentativa de publicação, o bot sorteia uma pausa de 1 a 3 minutos antes de processar a próxima reflexão válida. O intervalo também é respeitado quando a fila fica vazia e chega outra mensagem logo depois. Texto e áudio da mesma reflexão continuam sendo enviados juntos; a pausa longa é entre reflexões.

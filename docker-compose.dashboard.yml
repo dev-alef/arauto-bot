@@ -1,0 +1,8 @@
+# Opcional: habilita o painel em porta separada do webhook.
+services:
+  bot:
+    environment:
+      AR_AUTO_DASHBOARD_PASSWORD: '${AR_AUTO_DASHBOARD_PASSWORD:?Configure AR_AUTO_DASHBOARD_PASSWORD no .env do projeto Compose}'
+      AR_AUTO_DASHBOARD_INTERNAL_PORT: '3001'
+    ports:
+      - '${AR_AUTO_DASHBOARD_BIND:-127.0.0.1}:${AR_AUTO_DASHBOARD_PORT:-3001}:3001'

@@ -6,6 +6,7 @@
  */
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const monitor = require('./monitor');
 
 async function adaptTextWithAI(originalText, instruction, tentativa = 1) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -40,6 +41,7 @@ ${originalText}`;
     // Retry para erros temporários (503 = sobrecarga, 429 = rate limit)
     if ((response.status === 503 || response.status === 429) && tentativa <= 3) {
       const espera = tentativa * 5000; // 5s, 10s, 15s
+      monitor.evento(`Gemini ocupado; nova tentativa em ${espera / 1000} segundos.`, 'warn');
       console.log(`  ⏳ Gemini ocupado, nova tentativa em ${espera / 1000}s (${tentativa}/3)...`);
       await new Promise(r => setTimeout(r, espera));
       return adaptTextWithAI(originalText, instruction, tentativa + 1);

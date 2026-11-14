@@ -12,6 +12,7 @@ const express = require('express');
 const { processMessage } = require('./src/bot');
 const { parseWebhookMessage } = require('./src/whatsapp');
 const { log } = require('./src/logger');
+const { iniciarPainel } = require('./src/dashboard');
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -61,3 +62,5 @@ app.listen(PORT, () => {
   log(`📡 Webhook disponível em: http://localhost:${PORT}/webhook`);
   log(`🎯 Grupo destino: ${process.env.TARGET_GROUP_ID || 'não configurado'}`);
 });
+
+iniciarPainel();
