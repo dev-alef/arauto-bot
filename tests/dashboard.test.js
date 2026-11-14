@@ -35,6 +35,20 @@ test('painel é acessível sem senha e não expõe credenciais', async t => {
   assert.doesNotMatch(JSON.stringify(estado), /segredo-/);
 });
 
+test('falha do monitor de containers não impede o painel de responder', async t => {
+  const { criarPainel } = require('../src/dashboard');
+  const servidor = criarPainel({ consultarSaude: async () => 'respondendo',
+    consultarRecursos: async () => ({ cpuPercentual: 10, gpu: null }),
+    consultarContainers: () => { throw new Error('monitor indisponível'); } }).listen(0, '127.0.0.1');
+  await once(servidor, 'listening');
+  t.after(() => { servidor.closeAllConnections(); servidor.close(); });
+  const resposta = await fetch(`http://127.0.0.1:${servidor.address().port}/api/status`);
+  assert.equal(resposta.status, 200);
+  const dados = await resposta.json();
+  assert.equal(dados.containers.disponivel, false);
+  assert.equal(dados.kokoro, 'respondendo');
+});
+
 test('painel verifica a disponibilidade do Kokoro sem expor seu endereço', async t => {
   const variaveis = ['TTS_PROVIDER', 'KOKORO_URL'];
   const anteriores = Object.fromEntries(variaveis.map(k => [k, process.env[k]]));

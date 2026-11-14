@@ -1,0 +1,18 @@
+[Unit]
+Description=Monitor de containers para o painel Arauto
+After=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/arauto-containers/monitor-containers.py
+Restart=always
+RestartSec=5
+Environment=PATH=/usr/bin:/bin
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/arauto-containers
+
+[Install]
+WantedBy=multi-user.target

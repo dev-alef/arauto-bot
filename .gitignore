@@ -15,6 +15,10 @@ logs/
 Thumbs.db
 .DS_Store
 
+# Cache dos monitores Python
+__pycache__/
+*.py[cod]
+
 # Versões do TTS instaladas automaticamente
 .tts-runtime/
 

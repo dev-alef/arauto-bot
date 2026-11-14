@@ -5,5 +5,11 @@ services:
       AR_AUTO_DASHBOARD_ENABLED: 'true'
       AR_AUTO_DASHBOARD_INTERNAL_PORT: '3001'
       AR_AUTO_DASHBOARD_INTERNAL_BIND: '0.0.0.0'
+      AR_AUTO_CONTAINERS_STATUS_FILE: /run/arauto-containers/status.json
     ports:
       - '${AR_AUTO_DASHBOARD_BIND:-127.0.0.1}:${AR_AUTO_DASHBOARD_PORT:-3001}:3001'
+    volumes:
+      - type: bind
+        source: /var/lib/arauto-containers
+        target: /run/arauto-containers
+        read_only: true

@@ -3,8 +3,10 @@ const path = require('path');
 const express = require('express');
 const monitor = require('./monitor');
 const { criarLeitorRecursos } = require('./recursos');
+const { criarLeitorContainers } = require('./containers');
 const { log } = require('./logger');
 const leitorRecursos = criarLeitorRecursos();
+const leitorContainers = criarLeitorContainers();
 
 async function saudeKokoro() {
   const provedor = (process.env.TTS_PROVIDER || 'edge').trim().toLowerCase();
@@ -19,7 +21,8 @@ async function saudeKokoro() {
   }
 }
 
-function criarPainel({ consultarSaude = saudeKokoro, consultarRecursos = leitorRecursos.consultar } = {}) {
+function criarPainel({ consultarSaude = saudeKokoro, consultarRecursos = leitorRecursos.consultar,
+  consultarContainers = leitorContainers.consultar } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -30,8 +33,11 @@ function criarPainel({ consultarSaude = saudeKokoro, consultarRecursos = leitorR
   app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'painel.html')));
   app.get('/api/status', async (req, res) => {
     try {
-      const [kokoro, recursos] = await Promise.all([consultarSaude(), consultarRecursos()]);
-      res.json({ ...monitor.consultar(), kokoro, recursos });
+      const [kokoro, recursos, containers] = await Promise.all([
+        consultarSaude(), consultarRecursos(),
+        Promise.resolve().then(consultarContainers).catch(() => ({ disponivel: false, motivo: 'monitor_indisponivel' })),
+      ]);
+      res.json({ ...monitor.consultar(), kokoro, recursos, containers });
     } catch {
       res.status(503).json({ erro: 'Não foi possível consultar o estado do painel.' });
     }

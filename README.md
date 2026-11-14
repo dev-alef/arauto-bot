@@ -337,6 +337,17 @@ Para Gemini e Kokoro, a barra mostra uma **estimativa**, não uma porcentagem re
 
 O uso de CPU é uma leitura geral do servidor. Na execução direta, a GPU mostra uso e memória se `nvidia-smi` estiver disponível ao processo do bot. Com o complemento opcional NVIDIA, um monitor isolado consulta a placa e repassa as métricas pela rede interna; se não estiver disponível, o painel mostra “Sem dados”. Não é necessário conceder acesso ao socket Docker para o painel.
 
+O quadro **Containers do servidor** mostra os nomes e estados retornados pelo Docker, inclusive containers parados, reiniciando ou com falha no healthcheck. A consulta é feita a cada 10 segundos; o painel sinaliza quando o monitor não consegue consultar o Docker ou seus dados ficam antigos. O estado do container não garante que o WhatsApp esteja conectado. Como o painel pertence ao bot, ele fica inacessível quando o próprio bot está parado.
+
+No Ubuntu com systemd e Docker local, instale uma vez o monitor no host depois de baixar o código:
+
+```bash
+cd ~/dev/arauto-bot
+sudo ./scripts/instalar-monitor-containers.sh
+```
+
+O monitor inicia junto com o sistema e publica somente nome, estado e status dos containers em `/var/lib/arauto-containers/status.json`. Ele precisa acessar o Docker no host; o bot recebe apenas esse diretório em modo de leitura, sem acesso ao socket Docker. O painel lista até 200 containers e avisa caso haja mais. Se o monitor não estiver instalado, as outras funções do painel continuam disponíveis. Se a implementação do monitor for atualizada no futuro, execute novamente o instalador para copiar a nova versão.
+
 A página e o Kokoro funcionam na rede local após a instalação; o bot precisa de internet para o Gemini e das conexões habituais da Evolution para o WhatsApp. O painel local não precisa ser publicado na internet para mostrar o Gemini.
 
 No servidor, após baixar esta versão, adicione no `.env` do projeto Compose da Evolution, preservando as demais configurações:
@@ -356,6 +367,14 @@ sudo ./scripts/arauto-compose.sh -f "$HOME/dev/arauto-bot/docker-compose.dashboa
 ```
 
 Abra `http://IP_DO_SERVIDOR:3001/` no navegador. O complemento habilita o painel e passa a constar na configuração do container: comandos posteriores com `scripts/arauto-compose.sh` o preservam. Para acesso exclusivo no próprio servidor use `http://127.0.0.1:3001/`. Em execução direta, defina `AR_AUTO_DASHBOARD_ENABLED=true` para habilitar o painel; ele escuta apenas em `127.0.0.1` por padrão. Para permitir acesso direto pela rede local, configure explicitamente `AR_AUTO_DASHBOARD_INTERNAL_BIND` com o IP desejado.
+
+Se o painel Docker já estava habilitado antes da instalação do monitor, reconstrua e recrie somente o bot após esvaziar a fila para montar o diretório de estados:
+
+```bash
+sudo ./scripts/arauto-compose.sh up -d --build --no-deps bot
+```
+
+Se o quadro disser que o monitor está indisponível, verifique `sudo systemctl status arauto-containers.service --no-pager` e se o arquivo `/var/lib/arauto-containers/status.json` existe. Mensagens recebidas durante a recriação do bot podem não ser processadas.
 
 O painel usa HTTP **sem autenticação**, e o texto gerado fica visível a qualquer pessoa que consiga acessá-lo. Use-o somente em uma rede local confiável e não publique a porta na internet; para acesso remoto, use uma conexão privada, como VPN ou túnel SSH. A antiga variável `AR_AUTO_DASHBOARD_PASSWORD`, se ainda existir no `.env`, não é utilizada. Se o IP do servidor mudar, atualize o `.env` e recrie o bot após a fila esvaziar.
 
